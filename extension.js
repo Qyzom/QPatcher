@@ -236,17 +236,23 @@ export default class QPatcherExtension extends Extension {
             this._syncDashToDockSettings();
         });
 
-        watchKey(this._settings, 'dock-running-dots-hide', () => {
+        const updateRunningDotsVisibility = () => {
             const hide = getBool('dock-running-dots-hide');
-            toggleClass('qpatcher-no-dock-running-dots', hide);
+            const runningBar = getBool('dock-running-indicator-bar');
+            const shouldHide = hide && !runningBar;
+            toggleClass('qpatcher-no-dock-running-dots', shouldHide);
             const dash = Main.overview?.dash || Main.overview?._overview?._controls?._dash;
             if (dash?._box) {
                 for (const item of dash._box.get_children()) {
                     const appIcon = item.child || item;
-                    if (appIcon?._dot) appIcon._dot.visible = !hide;
+                    if (appIcon?._dot) appIcon._dot.visible = !shouldHide;
                 }
             }
-        });
+            this._syncDashToDockSettings();
+        };
+
+        watchKey(this._settings, 'dock-running-dots-hide', updateRunningDotsVisibility);
+        watchKey(this._settings, 'dock-running-indicator-bar', updateRunningDotsVisibility);
 
         watchKey(this._settings, 'dock-tooltips-hide', () => {
             const hide = getBool('dock-tooltips-hide');
@@ -274,10 +280,6 @@ export default class QPatcherExtension extends Extension {
 
         watchKey(this._settings, 'dock-notification-badge-accent', () => {
             this._updateDynamicThemeStylesheet();
-        });
-
-        watchKey(this._settings, 'dock-running-indicator-bar', () => {
-            this._syncDashToDockSettings();
         });
 
         watchKey(this._settings, 'dock-magnification', () => {
@@ -1196,14 +1198,16 @@ export default class QPatcherExtension extends Extension {
             d2d.set_boolean('custom-theme-shrink', true);
             d2d.set_string('transparency-mode', 'FIXED');
 
-            // Одиночная полоска активности вместо точек
-            if (hideDots) {
-                d2d.set_boolean('custom-theme-customize-running-dots', false);
-            } else if (runningBar) {
+            // Индикаторы активности запущенных приложений (одиночная полоска или точки)
+            if (runningBar) {
                 d2d.set_string('running-indicator-style', 'SOLID');
                 d2d.set_boolean('custom-theme-customize-running-dots', true);
                 d2d.set_string('custom-theme-running-dots-color', accentColor);
+                d2d.set_string('custom-theme-running-dots-border-color', accentColor);
                 d2d.set_int('custom-theme-running-dots-border-width', 0);
+            } else if (hideDots) {
+                d2d.set_string('running-indicator-style', 'DEFAULT');
+                d2d.set_boolean('custom-theme-customize-running-dots', false);
             } else {
                 d2d.set_string('running-indicator-style', 'DOTS');
                 d2d.set_boolean('custom-theme-customize-running-dots', false);

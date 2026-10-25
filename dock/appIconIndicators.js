@@ -50,10 +50,9 @@ export class AppIconIndicator {
         let runningIndicatorStyle;
 
         const {settings} = Docking.DockManager;
-        if (settings.applyCustomTheme)
+        ({runningIndicatorStyle} = settings);
+        if (runningIndicatorStyle === undefined || runningIndicatorStyle === null)
             runningIndicatorStyle = RunningIndicatorStyle.DOTS;
-        else
-            ({runningIndicatorStyle} = settings);
 
         if (settings.showIconsEmblems &&
             !Docking.DockManager.getDefault().notificationsMonitor.dndMode) {
@@ -359,11 +358,10 @@ class RunningIndicatorDots extends RunningIndicatorBase {
         this._borderWidth = themeNode.get_border_width(this._side);
         this._bodyColor = themeNode.get_background_color();
 
+        const Color = Clutter.Color ?? Cogl.Color;
         const {settings} = Docking.DockManager;
         if (!settings.applyCustomTheme) {
             // Adjust for the backlit case
-            const Color = Clutter.Color ?? Cogl.Color;
-
             if (settings.unityBacklitItems) {
                 // Use dominant color for dots too if the backlit is enables
                 const colorPalette = this._dominantColorExtractor._getColorPalette();
@@ -390,13 +388,19 @@ class RunningIndicatorDots extends RunningIndicatorBase {
                     // Fallback
                     [, this._bodyColor] = Color.from_string(settings.customThemeRunningDotsColor);
             }
+        }
 
-            // Finally, use customize style if requested
-            if (settings.customThemeCustomizeRunningDots) {
+        // Finally, use customize style if requested
+        if (settings.customThemeCustomizeRunningDots) {
+            if (settings.customThemeRunningDotsBorderColor)
                 [, this._borderColor] = Color.from_string(settings.customThemeRunningDotsBorderColor);
-                this._borderWidth = settings.customThemeRunningDotsBorderWidth;
-                [, this._bodyColor] =  Color.from_string(settings.customThemeRunningDotsColor);
-            }
+            this._borderWidth = settings.customThemeRunningDotsBorderWidth ?? 0;
+            if (settings.customThemeRunningDotsColor)
+                [, this._bodyColor] = Color.from_string(settings.customThemeRunningDotsColor);
+        }
+
+        if (!this._bodyColor) {
+            [, this._bodyColor] = Color.from_string('#ffffff');
         }
 
         // Define the radius as an arbitrary size, but keep large enough to account
@@ -514,22 +518,27 @@ class RunningIndicatorSegmented extends RunningIndicatorDots {
 class RunningIndicatorSolid extends RunningIndicatorDots {
     _drawIndicator(cr) {
         if (this._source.running) {
-            const size =  Math.max(this._width / 20, this._borderWidth);
-            let padding = this._borderWidth;
-            // For the backlit case here we don't want the outer border visible
-            if (Docking.DockManager.settings.unityBacklitItems &&
-                !Docking.DockManager.settings.customThemeCustomizeRunningDots)
-                padding = 0;
-            const yOffset = this._height - padding - size;
+            const barHeight = Math.max(3, Math.round(this._width / 16));
+            const barWidth = Math.round(this._width * 0.45);
+            const padding = Math.max(2, this._borderWidth);
+            const yOffset = this._height - padding - barHeight;
+            const xOffset = Math.floor((this._width - barWidth) / 2);
+            const r = barHeight / 2;
 
-            cr.setLineWidth(this._borderWidth);
-            Utils.cairoSetSourceColor(cr, this._borderColor);
+            cr.translate(xOffset, yOffset);
 
-            cr.translate(0, yOffset);
+            // Sleek rounded pill bar
             cr.newSubPath();
-            cr.rectangle(0, 0, this._width, size);
+            cr.arc(barWidth - r, r, r, -Math.PI / 2, Math.PI / 2);
+            cr.arc(r, r, r, Math.PI / 2, 3 * Math.PI / 2);
+            cr.closePath();
 
-            cr.strokePreserve();
+            if (this._borderWidth > 0 && this._borderColor) {
+                cr.setLineWidth(this._borderWidth);
+                Utils.cairoSetSourceColor(cr, this._borderColor);
+                cr.strokePreserve();
+            }
+
             Utils.cairoSetSourceColor(cr, this._bodyColor);
             cr.fill();
         }
