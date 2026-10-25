@@ -1,0 +1,11 @@
+# Dynamic CSS and compiled schemas
+qpatcher-dynamic.css
+schemas/gschemas.compiled
+dock/schemas/gschemas.compiled
+
+# Editor & System cruft
+.DS_Store
+*~
+*.swp
+*.bak
+.cache/

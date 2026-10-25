@@ -1,0 +1,446 @@
+/* QPatcher Master Stylesheet — Clean, Fast, Bulletproof */
+
+/* =================================================== */
+/* 1. ТОПБАР                                           */
+/* =================================================== */
+
+/* Удаление паразитных теней, границ и обводок */
+#panel {
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+#panel.qpatcher-topbar-transparent {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+#panel.qpatcher-topbar-theme,
+#panel.qpatcher-topbar-blur {
+    border: none !important;
+    box-shadow: none !important;
+}
+
+#panel {
+    transition: background-color 250ms ease-out !important;
+}
+
+#panel.qpatcher-topbar-transparent-in-overview,
+#panelBox #panel.qpatcher-topbar-transparent-in-overview {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+/* Скрытие иконки уведомлений на часах */
+.qpatcher-hide-panel-notification-icon #panel .message-counter,
+.qpatcher-hide-panel-notification-icon #panel .notification-badge {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Скрытие меню доступности ("человечек") */
+.qpatcher-hide-a11y #panel .accessibility,
+.qpatcher-hide-a11y #panel [accessible-name*="Accessibility"],
+.qpatcher-hide-a11y #panel [accessible-name*="Специальные возможности"] {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.qpatcher-blurred {
+    backdrop-filter: blur(25px) !important;
+    -webkit-backdrop-filter: blur(25px) !important;
+}
+
+
+/* =================================================== */
+/* 2. ДОК (Dash и Dash to Dock)                        */
+/* =================================================== */
+
+/* Скрытие счетчиков уведомлений на иконках дока */
+.qpatcher-hide-dock-notification-badge .notification-badge,
+.qpatcher-hide-dock-notification-badge #dashtodockContainer .notification-badge,
+.qpatcher-hide-dock-notification-badge .app-well-app .notification-badge,
+.qpatcher-hide-dock-notification-badge .overview-tile .notification-badge,
+.qpatcher-hide-dock-notification-badge .icon-grid .notification-badge {
+    display: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Современный аккуратный бейдж уведомлений (вместо неуклюжего прямоугольника) */
+#dashtodockContainer .notification-badge,
+.overview-tile .notification-badge,
+.icon-grid .notification-badge,
+.app-well-app .notification-badge,
+.notification-badge {
+    min-width: 18px !important;
+    min-height: 18px !important;
+    height: 18px !important;
+    padding: 0 4px !important;
+    margin: 0 !important;
+    border-radius: 9999px !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    text-align: center !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
+}
+
+/* Подсветка бейджа уведомлений акцентным цветом */
+.qpatcher-badge-accent .notification-badge,
+.qpatcher-badge-accent #dashtodockContainer .notification-badge,
+.qpatcher-badge-accent .app-well-app .notification-badge,
+.qpatcher-badge-accent .overview-tile .notification-badge,
+.qpatcher-badge-accent .icon-grid .notification-badge {
+    background-color: var(--qpatcher-accent-color, #3584e4) !important;
+    color: #ffffff !important;
+}
+
+/* Скрытие разделителя во всех положениях */
+.qpatcher-no-dock-separator .dash-separator,
+.qpatcher-no-dock-separator #dash .dash-separator,
+.qpatcher-no-dock-separator #dashtodockContainer .dash-separator,
+.qpatcher-no-dock-separator #dashtodockContainer #dash .dash-separator,
+.dash-separator.qpatcher-hidden {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    spacing: 0 !important;
+    opacity: 0 !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+/* Скрытие точек активности */
+.qpatcher-no-dock-running-dots .app-grid-running-dot,
+.qpatcher-no-dock-running-dots .app-well-app-running-dot,
+.qpatcher-no-dock-running-dots #dash .app-grid-running-dot,
+.qpatcher-no-dock-running-dots #dash .app-well-app-running-dot,
+.qpatcher-no-dock-running-dots #dashtodockContainer .app-well-app-running-dot,
+.qpatcher-no-dock-running-dots #dashtodockContainer .app-grid-running-dot,
+.qpatcher-no-dock-running-dots #dashtodockContainer #dash .dash-item-container .app-well-app .app-well-app-running-dot,
+.qpatcher-no-dock-running-dots #dashtodockContainer #dash .dash-item-container .app-well-app .app-grid-running-dot {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: transparent !important;
+    border: none !important;
+}
+
+/* Скрытие всплывающих подсказок (Tooltips) в доке */
+.qpatcher-no-dock-tooltips .dash-label,
+.qpatcher-no-dock-tooltips #dashtodockContainer .dash-label,
+.qpatcher-no-dock-tooltips .dash-item-container .dash-label,
+.qpatcher-no-dock-tooltips .dash-item-container StTooltip,
+.qpatcher-no-dock-tooltips #dashtodockContainer StTooltip,
+.qpatcher-no-dock-tooltips .app-well-app StTooltip,
+.dash-label.qpatcher-hidden-label {
+    display: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Скрытие кнопки всех приложений */
+.qpatcher-no-dock-show-apps #dash .show-apps,
+.qpatcher-no-dock-show-apps #dashtodockContainer .show-apps,
+.qpatcher-no-dock-show-apps .show-apps {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+
+/* =================================================== */
+/* 3. ОБЗОР (OVERVIEW)                                 */
+/* =================================================== */
+
+/* Реальное размытие фона: делаем однотонный темно-серый фон овервью прозрачным, открывая размытые растянутые обои */
+.qpatcher-overview-blur-active #overviewGroup {
+    background-color: transparent !important;
+}
+
+.qpatcher-overview-blur-active .workspace-animation {
+    background-color: transparent !important;
+}
+
+.qpatcher-no-window-close .window-close {
+    display: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+.qpatcher-no-window-icon .window-icon,
+.qpatcher-no-window-icon .window-preview-icon {
+    display: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Скрытие заголовка окна БЕЗ черного прямоугольника */
+.qpatcher-no-window-title .window-caption {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+}
+
+.qpatcher-no-overview-search .search-entry,
+.qpatcher-no-overview-search .search-entry-bin {
+    display: none !important;
+    opacity: 0 !important;
+    height: 0 !important;
+}
+
+.qpatcher-no-overview-thumbnails .workspace-thumbnails {
+    display: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+
+/* =================================================== */
+/* 4. УВЕДОМЛЕНИЯ (NOTIFICATIONS)                      */
+/* =================================================== */
+
+.qpatcher-no-notification-close .message-close-button,
+.qpatcher-no-notification-close .notification-banner .message-close-button,
+.qpatcher-no-notification-close .message .message-close-button,
+.qpatcher-no-notification-close .message .message-header .message-close-button {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.qpatcher-notification-theme .notification-banner,
+.qpatcher-notification-theme .message,
+.qpatcher-notification-theme .message-list .message,
+.notification-banner.qpatcher-notification-theme,
+.message.qpatcher-notification-theme {
+    background-color: var(--qpatcher-theme-color, #232326) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.qpatcher-notification-blur .notification-banner,
+.qpatcher-notification-blur .message,
+.qpatcher-notification-blur .message-list .message,
+.notification-banner.qpatcher-notification-blur,
+.message.qpatcher-notification-blur {
+    background-color: var(--qpatcher-theme-color-blur, rgba(35, 35, 38, 0.55)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35) !important;
+}
+
+
+/* =================================================== */
+/* 5. ШТОРКА (DATEMENU)                                */
+/* =================================================== */
+
+/* Полное скрытие разделителя, устранение асимметрии и центрирование message-list при скрытом календаре */
+.qpatcher-hide-calendar-column .message-list,
+.qpatcher-hide-calendar-column .message-list:ltr,
+.qpatcher-hide-calendar-column .message-list:rtl,
+.qpatcher-hide-calendar .message-list,
+.qpatcher-hide-calendar .message-list:ltr,
+.qpatcher-hide-calendar .message-list:rtl {
+    border: none !important;
+    border-right: none !important;
+    border-left: none !important;
+    border-right-width: 0 !important;
+    border-left-width: 0 !important;
+    border-width: 0 !important;
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    width: 26em !important;
+}
+
+/* Устраняем 12px асимметрию message-view на правой стороне */
+.qpatcher-hide-calendar-column .message-view,
+.qpatcher-hide-calendar-column .message-view:ltr,
+.qpatcher-hide-calendar-column .message-view:rtl,
+.qpatcher-hide-calendar .message-view,
+.qpatcher-hide-calendar .message-view:ltr,
+.qpatcher-hide-calendar .message-view:rtl {
+    margin: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 0 !important;
+}
+
+.qpatcher-hide-calendar-column .message-view .message,
+.qpatcher-hide-calendar .message-view .message {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: 12px !important;
+}
+
+/* Полное скрытие правой колонки */
+.qpatcher-hide-calendar-column .datemenu-calendar-column,
+.qpatcher-hide-calendar .datemenu-calendar-column {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-left: none !important;
+}
+
+/* Симметричные отступы внутри всей шторки calendarArea */
+.qpatcher-hide-calendar-column #calendarArea,
+.qpatcher-hide-calendar #calendarArea {
+    padding: 10px 14px !important;
+    margin: 0 !important;
+}
+
+/* Центрирование кнопки "Очистить" */
+.qpatcher-hide-calendar-column .message-list-controls,
+.qpatcher-hide-calendar .message-list-controls {
+    padding: 8px 0 0 0 !important;
+    margin: 0 !important;
+    justify-content: center !important;
+    text-align: center !important;
+}
+
+.qpatcher-hide-calendar-column .message-list-controls .message-list-clear-button,
+.qpatcher-hide-calendar .message-list-controls .message-list-clear-button {
+    margin: 0 auto !important;
+}
+
+/* Простое скрытие календаря */
+.qpatcher-hide-calendar .calendar,
+.qpatcher-hide-calendar .datemenu-calendar-column .calendar {
+    display: none !important;
+}
+
+/* Компактный режим для пустых уведомлений */
+.qpatcher-compact-empty-notifications .message-list-placeholder > StLabel,
+.qpatcher-compact-empty-notifications .message-list-placeholder label {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    opacity: 0 !important;
+}
+
+.qpatcher-compact-empty-notifications .message-list-placeholder {
+    padding-top: 24px !important;
+    padding-bottom: 24px !important;
+    spacing: 0 !important;
+}
+
+.qpatcher-compact-empty-notifications .message-list-placeholder > StIcon {
+    margin-bottom: 0 !important;
+    y-align: center !important;
+}
+
+
+/* =================================================== */
+/* 6. ВСЕ МЕНЮ И СИСТЕМНЫЕ ДИАЛОГИ (THEME COLOR)       */
+/* =================================================== */
+
+.app-menu,
+.popup-menu.app-menu,
+.popup-menu,
+.popup-menu-boxpointer {
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.qpatcher-recolor-menus .popup-menu-content,
+.qpatcher-recolor-menus .candidate-popup-content,
+.qpatcher-recolor-menus .app-menu .popup-menu-content,
+.qpatcher-recolor-menus .modal-dialog,
+.qpatcher-recolor-menus .quick-toggle-menu,
+.qpatcher-menus-theme .popup-menu-content,
+.qpatcher-menus-theme .candidate-popup-content,
+.qpatcher-menus-theme .app-menu .popup-menu-content,
+.qpatcher-menus-theme .modal-dialog,
+.qpatcher-menus-theme .quick-toggle-menu {
+    background-color: var(--qpatcher-theme-color, #232326) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.qpatcher-menus-blur .popup-menu-content,
+.qpatcher-menus-blur .candidate-popup-content,
+.qpatcher-menus-blur .app-menu .popup-menu-content,
+.qpatcher-menus-blur .modal-dialog,
+.qpatcher-menus-blur .quick-toggle-menu {
+    background-color: var(--qpatcher-theme-color-blur, rgba(35, 35, 38, 0.65)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45) !important;
+}
+
+.qpatcher-recolor-menus .popup-sub-menu .popup-menu-item,
+.qpatcher-menus-theme .popup-sub-menu .popup-menu-item,
+.qpatcher-menus-blur .popup-sub-menu .popup-menu-item {
+    background-color: transparent !important;
+}
+
+.qpatcher-recolor-menus .modal-dialog,
+.qpatcher-menus-theme .modal-dialog,
+.qpatcher-menus-blur .modal-dialog {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* ========================================== */
+/* 8. СКРИНШОТЫ (SCREENSHOTS)                 */
+/* ========================================== */
+.qpatcher-screenshot-hide-panel .screenshot-ui-panel,
+.qpatcher-screenshot-hide-panel .screenshot-ui-close-button {
+    display: none !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.qpatcher-recolor-menus .screenshot-ui-panel,
+.qpatcher-menus-theme .screenshot-ui-panel {
+    background-color: var(--qpatcher-theme-color, #232326) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
+}
+

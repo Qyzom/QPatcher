@@ -1,0 +1,2081 @@
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
+import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
+import St from 'gi://St';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as WindowPreview from 'resource:///org/gnome/shell/ui/windowPreview.js';
+import * as Dash from 'resource:///org/gnome/shell/ui/dash.js';
+import * as Background from 'resource:///org/gnome/shell/ui/background.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
+import { DockManager } from './dock/docking.js';
+
+export default class QPatcherExtension extends Extension {
+    _getUiGroup() {
+        return Main.uiGroup || Main.layoutManager?.uiGroup;
+    }
+
+    _hexToRgba(hex, alpha) {
+        let clean = (hex || '#232326').replace('#', '').trim();
+        if (clean.length === 3) {
+            clean = clean.split('').map(c => c + c).join('');
+        }
+        const r = parseInt(clean.substring(0, 2), 16) || 35;
+        const g = parseInt(clean.substring(2, 4), 16) || 35;
+        const b = parseInt(clean.substring(4, 6), 16) || 38;
+        return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
+    }
+
+    enable() {
+        this._settings = this.getSettings();
+        this._signals = [];
+
+        this._dockAdapter = {
+            uuid: this.uuid,
+            path: `${this.path}/dock`,
+            dir: Gio.File.new_for_path(`${this.path}/dock`),
+            metadata: this.metadata,
+            getSettings: (schema) => {
+                return new Gio.Settings({ schema_id: schema || 'org.gnome.shell.extensions.dash-to-dock' });
+            },
+            openPreferences: () => {
+                this.openPreferences();
+            },
+        };
+
+        // Внешние системные интерфейсы
+        this._interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
+        this._a11ySettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.a11y' });
+        this._shellSettings = new Gio.Settings({ schema_id: 'org.gnome.shell' });
+
+        const watchKey = (settings, key, handler) => {
+            const id = settings.connect(`changed::${key}`, () => handler());
+            this._signals.push({ obj: settings, id });
+            handler();
+        };
+
+        const toggleClass = (className, shouldAdd) => {
+            const uiGroup = this._getUiGroup();
+            if (!uiGroup) return;
+            if (shouldAdd) {
+                uiGroup.add_style_class_name(className);
+            } else {
+                uiGroup.remove_style_class_name(className);
+            }
+        };
+
+        // ==========================================
+        // 1. ТОПБАР (TOPBAR)
+        // ==========================================
+
+        watchKey(this._settings, 'topbar-monitor', () => {
+            this._updatePanelMonitor();
+        });
+
+        watchKey(this._settings, 'keyboard-uppercase', () => {
+            this._updateKeyboardLayoutText();
+        });
+
+        watchKey(this._settings, 'clock-show-weekday', () => {
+            try {
+                this._interfaceSettings.set_boolean('clock-show-weekday', this._settings.get_boolean('clock-show-weekday'));
+            } catch (e) {}
+        });
+
+        watchKey(this._settings, 'clock-show-seconds', () => {
+            try {
+                this._interfaceSettings.set_boolean('clock-show-seconds', this._settings.get_boolean('clock-show-seconds'));
+            } catch (e) {}
+        });
+
+        // Цвет фона и прозрачность панели (с честным размытием Shell.BlurEffect)
+        const updatePanelColor = () => {
+            const style = this._settings.get_string('topbar-style');
+            const opacity = this._settings.get_int('topbar-opacity') / 100.0;
+            const radius = this._settings.get_int('blur-sigma') || 30;
+
+            if (Main.panel) {
+                Main.panel.opacity = Math.round(opacity * 255);
+                Main.panel.set_style(null);
+
+                const hasTheme = Main.panel.has_style_class_name('qpatcher-topbar-theme');
+                const hasBlur = Main.panel.has_style_class_name('qpatcher-topbar-blur');
+
+                if (style === 'theme-grey') {
+                    if (hasBlur) Main.panel.remove_style_class_name('qpatcher-topbar-blur');
+                    if (!hasTheme) Main.panel.add_style_class_name('qpatcher-topbar-theme');
+                    if (Main.panel.remove_effect_by_name) Main.panel.remove_effect_by_name('qpatcher-panel-blur');
+                } else if (style === 'blur') {
+                    if (hasTheme) Main.panel.remove_style_class_name('qpatcher-topbar-theme');
+                    if (!hasBlur) Main.panel.add_style_class_name('qpatcher-topbar-blur');
+                    if (Main.panel.get_effect && !Main.panel.get_effect('qpatcher-panel-blur')) {
+                        const effect = new Shell.BlurEffect({
+                            name: 'qpatcher-panel-blur',
+                            mode: Shell.BlurMode.BACKGROUND,
+                            radius: radius,
+                        });
+                        Main.panel.add_effect(effect);
+                    } else if (Main.panel.get_effect && Main.panel.get_effect('qpatcher-panel-blur')) {
+                        Main.panel.get_effect('qpatcher-panel-blur').radius = radius;
+                    }
+                } else {
+                    if (hasTheme) Main.panel.remove_style_class_name('qpatcher-topbar-theme');
+                    if (hasBlur) Main.panel.remove_style_class_name('qpatcher-topbar-blur');
+                    if (Main.panel.remove_effect_by_name) Main.panel.remove_effect_by_name('qpatcher-panel-blur');
+                }
+            }
+        };
+
+        watchKey(this._settings, 'topbar-style', () => {
+            updatePanelColor();
+            this._updateDynamicThemeStylesheet();
+        });
+        watchKey(this._settings, 'topbar-opacity', () => {
+            updatePanelColor();
+            this._updateDynamicThemeStylesheet();
+        });
+        watchKey(this._settings, 'theme-color', () => {
+            updatePanelColor();
+            this._updateDynamicThemeStylesheet();
+        });
+        watchKey(this._settings, 'blur-sigma', updatePanelColor);
+
+        // Видимость элементов панели
+        watchKey(this._settings, 'panel-visibility', () => {
+            if (Main.panel) Main.panel.visible = this._settings.get_boolean('panel-visibility');
+        });
+
+        watchKey(this._settings, 'activities-button', () => {
+            const show = this._settings.get_boolean('activities-button');
+            if (Main.panel?.statusArea?.activities) Main.panel.statusArea.activities.visible = show;
+        });
+
+        watchKey(this._settings, 'clock-menu', () => {
+            if (Main.panel?.statusArea?.dateMenu) Main.panel.statusArea.dateMenu.visible = this._settings.get_boolean('clock-menu');
+        });
+
+        watchKey(this._settings, 'accessibility-menu', () => {
+            const show = this._settings.get_boolean('accessibility-menu');
+            try {
+                this._a11ySettings.set_boolean('always-show-universal-access-status', show);
+            } catch (e) {}
+
+            const a11y = Main.panel?.statusArea?.a11y;
+            if (a11y?.container) a11y.container.visible = show;
+            else if (a11y) a11y.visible = show;
+
+            const a11y2 = Main.panel?.statusArea?.accessibility;
+            if (a11y2?.container) a11y2.container.visible = show;
+            else if (a11y2) a11y2.visible = show;
+
+            toggleClass('qpatcher-hide-a11y', !show);
+        });
+
+        watchKey(this._settings, 'quicksettings-button', () => {
+            const show = this._settings.get_boolean('quicksettings-button');
+            const qs = Main.panel?.statusArea?.quickSettings;
+            if (qs?.container) qs.container.visible = show;
+        });
+
+
+        // ==========================================
+        // 2. ДОК (DASH & DOCK)
+        // ==========================================
+
+        watchKey(this._settings, 'dock-separator-hide', () => {
+            const hide = this._settings.get_boolean('dock-separator-hide');
+            toggleClass('qpatcher-no-dock-separator', hide);
+            this._applyDashToDockSeparatorFix(!hide);
+        });
+
+        watchKey(this._settings, 'dock-show-apps-hide', () => {
+            const hide = this._settings.get_boolean('dock-show-apps-hide');
+            toggleClass('qpatcher-no-dock-show-apps', hide);
+            const dash = Main.overview?.dash || Main.overview?._overview?._controls?._dash;
+            if (dash?.showAppsButton) dash.showAppsButton.visible = !hide;
+            this._syncDashToDockSettings();
+        });
+
+        watchKey(this._settings, 'dock-running-dots-hide', () => {
+            const hide = this._settings.get_boolean('dock-running-dots-hide');
+            toggleClass('qpatcher-no-dock-running-dots', hide);
+            const dash = Main.overview?.dash || Main.overview?._overview?._controls?._dash;
+            if (dash?._box) {
+                for (const item of dash._box.get_children()) {
+                    const appIcon = item.child || item;
+                    if (appIcon?._dot) appIcon._dot.visible = !hide;
+                }
+            }
+        });
+
+        watchKey(this._settings, 'dock-tooltips-hide', () => {
+            const hide = this._settings.get_boolean('dock-tooltips-hide');
+            toggleClass('qpatcher-no-dock-tooltips', hide);
+            this._syncDashToDockSettings();
+        });
+
+        watchKey(this._settings, 'dock-notification-badge-hide', () => {
+            const hide = this._settings.get_boolean('dock-notification-badge-hide');
+            toggleClass('qpatcher-hide-dock-notification-badge', hide);
+            this._syncDashToDockSettings();
+        });
+
+        watchKey(this._settings, 'dock-show-mounts', () => {
+            this._syncDashToDockSettings();
+        });
+
+        watchKey(this._settings, 'dock-always-visible', () => {
+            this._syncDashToDockSettings();
+        });
+
+        watchKey(this._settings, 'dock-intellihide', () => {
+            this._syncDashToDockSettings();
+        });
+
+        watchKey(this._settings, 'dock-notification-badge-accent', () => {
+            this._updateDynamicThemeStylesheet();
+        });
+
+        watchKey(this._settings, 'dock-running-indicator-bar', () => {
+            this._syncDashToDockSettings();
+        });
+
+        watchKey(this._settings, 'dock-magnification', () => {
+            this._setupDockMagnification();
+        });
+
+        watchKey(this._settings, 'dock-icon-size', () => {
+            this._syncDashToDockSettings();
+        });
+
+        watchKey(this._settings, 'dock-style', () => {
+            this._syncDashToDockSettings();
+        });
+
+        watchKey(this._settings, 'dock-opacity', () => {
+            this._syncDashToDockSettings();
+        });
+
+
+        // ==========================================
+        // 3. ОБЗОР (OVERVIEW) & ОКНА
+        // ==========================================
+
+        watchKey(this._settings, 'overview-style', () => {
+            this._setupOverviewBlur();
+        });
+
+        watchKey(this._settings, 'overview-opacity', () => {
+            this._setupOverviewBlur();
+        });
+
+        watchKey(this._settings, 'blur-sigma', () => {
+            this._setupOverviewBlur();
+            this._updateDateMenuStyle();
+            this._updateQuickSettingsStyle();
+            this._updateNotificationStyle();
+        });
+
+        watchKey(this._settings, 'overview-window-close-button-hide', () => {
+            toggleClass('qpatcher-no-window-close', this._settings.get_boolean('overview-window-close-button-hide'));
+        });
+
+        watchKey(this._settings, 'overview-window-icon-hide', () => {
+            toggleClass('qpatcher-no-window-icon', this._settings.get_boolean('overview-window-icon-hide'));
+        });
+
+        watchKey(this._settings, 'overview-window-title-hide', () => {
+            toggleClass('qpatcher-no-window-title', this._settings.get_boolean('overview-window-title-hide'));
+        });
+
+        watchKey(this._settings, 'overview-search-hide', () => {
+            const hide = this._settings.get_boolean('overview-search-hide');
+            toggleClass('qpatcher-no-overview-search', hide);
+            const searchEntry = Main.overview?._overview?._controls?._searchEntry;
+            if (searchEntry) searchEntry.visible = !hide;
+        });
+
+        watchKey(this._settings, 'overview-workspace-switcher-hide', () => {
+            const hide = this._settings.get_boolean('overview-workspace-switcher-hide');
+            toggleClass('qpatcher-no-overview-thumbnails', hide);
+            const controls = Main.overview?._overview?._controls;
+            if (controls?._thumbnailsBox) controls._thumbnailsBox.visible = !hide;
+        });
+
+
+        // ==========================================
+        // 4. УВЕДОМЛЕНИЯ (NOTIFICATIONS)
+        // ==========================================
+
+        watchKey(this._settings, 'notification-monitor', () => {
+            this._updateNotificationPosition();
+        });
+
+        watchKey(this._settings, 'notification-horizontal-alignment', () => {
+            this._updateNotificationPosition();
+        });
+
+        watchKey(this._settings, 'notification-close-button-hide', () => {
+            toggleClass('qpatcher-no-notification-close', this._settings.get_boolean('notification-close-button-hide'));
+        });
+
+        watchKey(this._settings, 'panel-notification-icon-hide', () => {
+            toggleClass('qpatcher-hide-panel-notification-icon', this._settings.get_boolean('panel-notification-icon-hide'));
+        });
+
+        watchKey(this._settings, 'notification-style', () => this._updateNotificationStyle());
+        watchKey(this._settings, 'notification-opacity', () => this._updateNotificationStyle());
+
+
+        // ==========================================
+        // 5. ШТОРКА (DATEMENU)
+        // ==========================================
+
+        const updateDateMenuColumns = () => {
+            const dm = Main.panel?.statusArea?.dateMenu;
+            if (!dm) return;
+
+            const hideCalendar = this._settings.get_boolean('datemenu-calendar-hide');
+            const hideWeather = this._settings.get_boolean('datemenu-weather-hide');
+            const hideClocks = this._settings.get_boolean('datemenu-world-clocks-hide');
+            const hideEvents = this._settings.get_boolean('datemenu-events-hide');
+
+            if (dm._calendar) dm._calendar.visible = !hideCalendar;
+            if (dm._date) dm._date.visible = !hideCalendar;
+            if (dm._weatherItem) dm._weatherItem.visible = !hideWeather;
+            if (dm._clocksItem) dm._clocksItem.visible = !hideClocks;
+            if (dm._eventsItem) dm._eventsItem.visible = !hideEvents;
+
+            // Если справа всё скрыто, скрываем колонку целиком и схлопываем окно
+            const hasAnyRightItem = (!hideCalendar) || (!hideWeather) || (!hideClocks) || (!hideEvents);
+
+            const calendarCol = dm._calendar?.get_parent() || dm._calendarColumn;
+            if (calendarCol) {
+                calendarCol.visible = hasAnyRightItem;
+            }
+
+            if (!hasAnyRightItem) {
+                if (dm._messageList?._clearButton) {
+                    dm._messageList._clearButton.x_align = Clutter.ActorAlign.CENTER;
+                }
+            } else {
+                if (dm._messageList?._clearButton) {
+                    dm._messageList._clearButton.x_align = Clutter.ActorAlign.START;
+                }
+            }
+
+            toggleClass('qpatcher-hide-calendar-column', !hasAnyRightItem);
+            toggleClass('qpatcher-hide-calendar', hideCalendar);
+        };
+
+        watchKey(this._settings, 'datemenu-calendar-hide', updateDateMenuColumns);
+        watchKey(this._settings, 'datemenu-weather-hide', updateDateMenuColumns);
+        watchKey(this._settings, 'datemenu-world-clocks-hide', updateDateMenuColumns);
+        watchKey(this._settings, 'datemenu-events-hide', updateDateMenuColumns);
+
+        watchKey(this._settings, 'datemenu-compact-empty', () => {
+            const compact = this._settings.get_boolean('datemenu-compact-empty');
+            toggleClass('qpatcher-compact-empty-notifications', compact);
+            const placeholder = Main.panel?.statusArea?.dateMenu?._messageList?._placeholder;
+            if (placeholder?._label) placeholder._label.visible = !compact;
+            if (placeholder?._icon) {
+                placeholder._icon.y_align = compact ? Clutter.ActorAlign.CENTER : Clutter.ActorAlign.START;
+            }
+        });
+
+        watchKey(this._settings, 'datemenu-style', () => this._updateDateMenuStyle());
+        watchKey(this._settings, 'datemenu-opacity', () => this._updateDateMenuStyle());
+
+
+        // ==========================================
+        // 6. БЫСТРЫЕ НАСТРОЙКИ (QUICK SETTINGS)
+        // ==========================================
+
+        const updateQuickSettingsButtons = () => {
+            try {
+                const qs = Main.panel?.statusArea?.quickSettings;
+                const systemItem = qs?._system?.quickSettingsItems?.[0];
+                const box = systemItem?.child;
+                if (!box || !box.get_children) return;
+
+                const hidePower = this._settings.get_boolean('qs-power-hide');
+                const hideScreenshot = this._settings.get_boolean('qs-screenshot-hide');
+                const hideSettings = this._settings.get_boolean('qs-settings-hide');
+                const hideLock = this._settings.get_boolean('qs-lock-hide');
+
+                for (const child of box.get_children()) {
+                    const type = child.constructor.name;
+                    if (type === 'ShutdownItem') child.visible = !hidePower;
+                    else if (type === 'ScreenshotItem') child.visible = !hideScreenshot;
+                    else if (type === 'SettingsItem') child.visible = !hideSettings;
+                    else if (type === 'LockItem') child.visible = !hideLock;
+                }
+            } catch (e) {}
+        };
+
+        watchKey(this._settings, 'qs-power-hide', updateQuickSettingsButtons);
+        watchKey(this._settings, 'qs-screenshot-hide', updateQuickSettingsButtons);
+        watchKey(this._settings, 'qs-settings-hide', updateQuickSettingsButtons);
+        watchKey(this._settings, 'qs-lock-hide', updateQuickSettingsButtons);
+
+        // Растягивание нечетной плитки на всю ширину
+        watchKey(this._settings, 'quicksettings-full-width-toggle', () => {
+            this._applyQuickSettingsFullWidth();
+        });
+
+        watchKey(this._settings, 'quicksettings-style', () => this._updateQuickSettingsStyle());
+        watchKey(this._settings, 'quicksettings-opacity', () => this._updateQuickSettingsStyle());
+
+
+        // ==========================================
+        // 7. ПРОЧЕЕ (SYSTEM & ACCENT)
+        // ==========================================
+
+        watchKey(this._settings, 'dark-mode', () => {
+            const target = this._settings.get_boolean('dark-mode') ? 'prefer-dark' : 'default';
+            if (this._interfaceSettings.get_string('color-scheme') !== target) {
+                this._interfaceSettings.set_string('color-scheme', target);
+            }
+        });
+
+        watchKey(this._settings, 'lockscreen-prevent-blank', () => {
+            // ScreenShield activate hook automatically inspects the setting
+        });
+
+        watchKey(this._settings, 'recolor-all-menus-and-dialogs', () => {
+            this._updateDynamicThemeStylesheet();
+        });
+
+        watchKey(this._settings, 'menus-dialogs-style', () => {
+            this._updateDynamicThemeStylesheet();
+        });
+
+        watchKey(this._settings, 'notification-style', () => {
+            this._updateDynamicThemeStylesheet();
+            this._updateNotificationStyle();
+        });
+
+        watchKey(this._settings, 'notification-opacity', () => {
+            this._updateDynamicThemeStylesheet();
+            this._updateNotificationStyle();
+        });
+
+        watchKey(this._settings, 'topbar-transparent-in-overview', () => {});
+
+        if (Main.overview) {
+            this._overviewShowingId = Main.overview.connect('showing', () => {
+                if (this._settings.get_boolean('topbar-transparent-in-overview') && Main.panel) {
+                    Main.panel.add_style_class_name('qpatcher-topbar-transparent-in-overview');
+                    const blurEffect = Main.panel.get_effect?.('qpatcher-panel-blur');
+                    if (blurEffect) blurEffect.enabled = false;
+                }
+            });
+            this._overviewHidingId = Main.overview.connect('hiding', () => {
+                if (Main.panel) {
+                    Main.panel.remove_style_class_name('qpatcher-topbar-transparent-in-overview');
+                    const blurEffect = Main.panel.get_effect?.('qpatcher-panel-blur');
+                    if (blurEffect) blurEffect.enabled = true;
+                }
+            });
+            this._signals.push({ obj: Main.overview, id: this._overviewShowingId });
+            this._signals.push({ obj: Main.overview, id: this._overviewHidingId });
+        }
+
+        if (Main.layoutManager) {
+            const monChangedId = Main.layoutManager.connect('monitors-changed', () => {
+                this._setupOverviewBlur();
+            });
+            this._signals.push({ obj: Main.layoutManager, id: monChangedId });
+        }
+
+        if (global.stage) {
+            const stageChildId = global.stage.connect('child-added', (_, child) => {
+                if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        this._syncDashToDockSettings();
+                        this._setupDockMagnification();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                }
+            });
+            this._signals.push({ obj: global.stage, id: stageChildId });
+        }
+
+        watchKey(this._settings, 'accent-color', () => {
+            this._updateDynamicThemeStylesheet();
+            this._syncDashToDockSettings();
+        });
+
+        this._signals.push({
+            obj: this._interfaceSettings,
+            id: this._interfaceSettings.connect('changed::accent-color', () => {
+                this._updateDynamicThemeStylesheet();
+                this._syncDashToDockSettings();
+            })
+        });
+
+        // Первичная инициализация всех стилей и эффектов
+        updatePanelColor();
+        this._updatePanelMonitor();
+        this._syncDashToDockSettings();
+        this._setupOverviewBlur();
+        this._updateDateMenuStyle();
+        this._updateQuickSettingsStyle();
+        this._updateNotificationStyle();
+        this._applyQuickSettingsFullWidth();
+        this._updateDynamicThemeStylesheet();
+
+        // Устанавливаем надежные хуки на прототипы и индикаторы
+        this._setupKeyboardManagerHook();
+        this._setupClassPrototypePatches();
+        this._setupDockMagnification();
+        this._setupScreenShieldPatch();
+        this._setupScreenshotCustomizations();
+    }
+
+    _getAccentHex() {
+        const accentMap = {
+            'blue': '#3584e4',
+            'teal': '#2190a4',
+            'green': '#3a944a',
+            'yellow': '#c88800',
+            'orange': '#ed5b00',
+            'red': '#e62d42',
+            'pink': '#d53b8c',
+            'purple': '#9141ac',
+            'slate': '#5e6f82',
+        };
+        const cur = this._interfaceSettings?.get_string('accent-color') || this._settings?.get_string('accent-color') || 'blue';
+        return accentMap[cur] || '#3584e4';
+    }
+
+    _updateDynamicThemeStylesheet() {
+        try {
+            const themeColor = this._settings?.get_string('theme-color') || '#232326';
+            const topbarOpacity = (this._settings?.get_int('topbar-opacity') ?? 100) / 100.0;
+            const notifStyle = this._settings?.get_string('notification-style') || 'theme-grey';
+            const notifOpacity = (this._settings?.get_int('notification-opacity') ?? 100) / 100.0;
+            const menusStyle = this._settings?.get_string('menus-dialogs-style') || 'theme-grey';
+            const accentHex = this._getAccentHex();
+            const recolorMenus = this._settings?.get_boolean('recolor-all-menus-and-dialogs');
+            const badgeAccent = this._settings?.get_boolean('dock-notification-badge-accent');
+            const uiGroup = this._getUiGroup();
+            if (uiGroup) {
+                if (recolorMenus || menusStyle === 'theme-grey') {
+                    uiGroup.add_style_class_name('qpatcher-recolor-menus');
+                    uiGroup.add_style_class_name('qpatcher-menus-theme');
+                    uiGroup.remove_style_class_name('qpatcher-menus-blur');
+                } else if (menusStyle === 'blur') {
+                    uiGroup.add_style_class_name('qpatcher-recolor-menus');
+                    uiGroup.add_style_class_name('qpatcher-menus-blur');
+                    uiGroup.remove_style_class_name('qpatcher-menus-theme');
+                } else {
+                    uiGroup.remove_style_class_name('qpatcher-recolor-menus');
+                    uiGroup.remove_style_class_name('qpatcher-menus-theme');
+                    uiGroup.remove_style_class_name('qpatcher-menus-blur');
+                }
+
+                if (notifStyle === 'theme-grey') {
+                    uiGroup.add_style_class_name('qpatcher-notification-theme');
+                    uiGroup.remove_style_class_name('qpatcher-notification-blur');
+                } else if (notifStyle === 'blur') {
+                    uiGroup.add_style_class_name('qpatcher-notification-blur');
+                    uiGroup.remove_style_class_name('qpatcher-notification-theme');
+                } else {
+                    uiGroup.remove_style_class_name('qpatcher-notification-theme');
+                    uiGroup.remove_style_class_name('qpatcher-notification-blur');
+                }
+
+                if (badgeAccent) {
+                    uiGroup.add_style_class_name('qpatcher-badge-accent');
+                } else {
+                    uiGroup.remove_style_class_name('qpatcher-badge-accent');
+                }
+            }
+
+            const cssPath = GLib.build_filenamev([this.path, 'qpatcher-dynamic.css']);
+            const cssContent = `
+                #panel.qpatcher-topbar-theme,
+                #panelBox #panel.qpatcher-topbar-theme {
+                    background-color: ${this._hexToRgba(themeColor, topbarOpacity)} !important;
+                }
+
+                #panel.qpatcher-topbar-blur,
+                #panelBox #panel.qpatcher-topbar-blur {
+                    background-color: ${this._hexToRgba(themeColor, Math.min(0.45, topbarOpacity))} !important;
+                }
+
+                .notification-banner,
+                .message-banner,
+                .message-list .message,
+                .unlock-dialog-notifications-container .message {
+                    background-color: ${notifStyle === 'blur' ? this._hexToRgba(themeColor, Math.min(0.65, notifOpacity)) : this._hexToRgba(themeColor, notifOpacity)} !important;
+                }
+
+                .qpatcher-badge-accent .notification-badge,
+                .qpatcher-badge-accent #dashtodockContainer .notification-badge,
+                .qpatcher-badge-accent .app-well-app .notification-badge,
+                .qpatcher-badge-accent .overview-tile .notification-badge,
+                .qpatcher-badge-accent .icon-grid .notification-badge {
+                    background-color: ${accentHex} !important;
+                    color: #ffffff !important;
+                }
+
+                .app-menu,
+                .popup-menu.app-menu,
+                .popup-menu,
+                .popup-menu-boxpointer {
+                    background-color: transparent !important;
+                    background: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+
+                .qpatcher-recolor-menus .popup-menu-content,
+                .qpatcher-recolor-menus .candidate-popup-content,
+                .qpatcher-recolor-menus .app-menu .popup-menu-content,
+                .qpatcher-recolor-menus .modal-dialog,
+                .qpatcher-recolor-menus .quick-toggle-menu {
+                    background-color: ${menusStyle === 'blur' ? this._hexToRgba(themeColor, 0.65) : themeColor} !important;
+                    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                }
+            `;
+            GLib.file_set_contents(cssPath, cssContent);
+
+            const theme = St.ThemeContext.get_for_stage(global.stage)?.get_theme();
+            if (theme) {
+                const file = Gio.File.new_for_path(cssPath);
+                if (this._dynamicStylesheetLoaded) {
+                    try { theme.unload_stylesheet(file); } catch (e) {}
+                }
+                try {
+                    theme.load_stylesheet(file);
+                    this._dynamicStylesheetLoaded = true;
+                } catch (e) {}
+            }
+        } catch (e) {}
+    }
+
+    _setupOverviewBlur() {
+        this._destroyOverviewBlur();
+        const style = this._settings.get_string('overview-style');
+        const opacity = this._settings.get_int('overview-opacity') / 100.0;
+        const uiGroup = this._getUiGroup();
+        if (!uiGroup) return;
+
+        if (style !== 'blur') {
+            uiGroup.remove_style_class_name('qpatcher-overview-blur-active');
+            return;
+        }
+
+        uiGroup.add_style_class_name('qpatcher-overview-blur-active');
+        try {
+            if (!Main.layoutManager?.overviewGroup) return;
+            this._overviewBackgroundGroup = new Meta.BackgroundGroup({
+                name: 'qpatcher-overview-background-group',
+            });
+            this._overviewBackgroundGroup.add_constraint(new Clutter.BindConstraint({
+                source: Main.layoutManager.overviewGroup,
+                coordinate: Clutter.BindCoordinate.ALL,
+            }));
+            this._overviewBackgroundGroup.opacity = Math.round(opacity * 255);
+            this._overviewBackgroundManagers = [];
+
+            const radius = this._settings.get_int('blur-sigma') || 30;
+            const monitors = Main.layoutManager.monitors || [];
+            for (let i = 0; i < monitors.length; i++) {
+                const mon = monitors[i];
+                const monActor = new St.Widget({
+                    name: `qpatcher-overview-monitor-${i}`,
+                    x: mon.x,
+                    y: mon.y,
+                    width: mon.width,
+                    height: mon.height,
+                });
+
+                const source = new St.Widget({
+                    name: `qpatcher-overview-source-${i}`,
+                    visible: false,
+                });
+                source.add_constraint(new Clutter.BindConstraint({
+                    source: monActor,
+                    coordinate: Clutter.BindCoordinate.SIZE,
+                }));
+                monActor.add_child(source);
+
+                const clone = new Clutter.Clone({
+                    source: source,
+                });
+                clone.add_constraint(new Clutter.BindConstraint({
+                    source: monActor,
+                    coordinate: Clutter.BindCoordinate.SIZE,
+                }));
+                monActor.add_child(clone);
+
+                const bgManager = new Background.BackgroundManager({
+                    container: source,
+                    monitorIndex: i,
+                    controlPosition: false,
+                });
+                const effect = new Shell.BlurEffect({
+                    brightness: 0.85,
+                    radius: radius,
+                    mode: Shell.BlurMode.ACTOR,
+                });
+                effect.name = `qpatcher-overview-blur-${i}`;
+                clone.add_effect(effect);
+
+                this._overviewBackgroundGroup.add_child(monActor);
+                this._overviewBackgroundManagers.push(bgManager);
+            }
+
+            Main.layoutManager.overviewGroup.insert_child_at_index(this._overviewBackgroundGroup, 0);
+            this._overviewChildAddedId = Main.layoutManager.overviewGroup.connect('child-added', (_, child) => {
+                if (child !== this._overviewBackgroundGroup && this._overviewBackgroundGroup) {
+                    Main.layoutManager.overviewGroup.set_child_at_index(this._overviewBackgroundGroup, 0);
+                }
+            });
+        } catch (e) {}
+    }
+
+    _destroyOverviewBlur() {
+        try {
+            if (this._overviewChildAddedId && Main.layoutManager?.overviewGroup) {
+                Main.layoutManager.overviewGroup.disconnect(this._overviewChildAddedId);
+                this._overviewChildAddedId = 0;
+            }
+            if (this._overviewBackgroundManagers) {
+                this._overviewBackgroundManagers.forEach(mgr => {
+                    if (mgr?.destroy) mgr.destroy();
+                });
+                this._overviewBackgroundManagers = [];
+            }
+            if (this._overviewBackgroundGroup) {
+                if (this._overviewBackgroundGroup.get_parent()) {
+                    this._overviewBackgroundGroup.get_parent().remove_child(this._overviewBackgroundGroup);
+                }
+                this._overviewBackgroundGroup.destroy();
+                this._overviewBackgroundGroup = null;
+            }
+        } catch (e) {}
+    }
+
+    _updateDateMenuStyle() {
+        try {
+            const style = this._settings.get_string('datemenu-style');
+            const opacity = this._settings.get_int('datemenu-opacity') / 100.0;
+            const color = this._settings.get_string('theme-color') || '#232326';
+            const radius = this._settings.get_int('blur-sigma') || 30;
+            const dateMenu = Main.panel?.statusArea?.dateMenu;
+            const menuBox = dateMenu?.menu?.box;
+            if (!menuBox) return;
+
+            menuBox.remove_style_class_name('qpatcher-datemenu-theme');
+            menuBox.remove_style_class_name('qpatcher-datemenu-blur');
+            if (menuBox.remove_effect_by_name) {
+                menuBox.remove_effect_by_name('qpatcher-datemenu-blur');
+            }
+
+            if (style === 'theme-grey') {
+                menuBox.add_style_class_name('qpatcher-datemenu-theme');
+                menuBox.set_style(`background-color: ${this._hexToRgba(color, opacity)} !important;`);
+            } else if (style === 'blur') {
+                menuBox.add_style_class_name('qpatcher-datemenu-blur');
+                menuBox.set_style(`background-color: ${this._hexToRgba(color, Math.min(0.65, opacity))} !important;`);
+                const effect = new Shell.BlurEffect({
+                    brightness: 0.85,
+                    radius: radius,
+                    mode: Shell.BlurMode.BACKGROUND,
+                });
+                effect.name = 'qpatcher-datemenu-blur';
+                menuBox.add_effect(effect);
+            } else {
+                menuBox.set_style(null);
+            }
+
+            if (dateMenu.menu && !dateMenu.menu._qpatcherStyleHooked) {
+                dateMenu.menu._qpatcherStyleHooked = true;
+                dateMenu.menu.connect('open-state-changed', (menu, isOpen) => {
+                    if (isOpen) this._updateDateMenuStyle();
+                });
+            }
+        } catch (e) {}
+    }
+
+    _updateQuickSettingsStyle() {
+        try {
+            const style = this._settings.get_string('quicksettings-style');
+            const opacity = this._settings.get_int('quicksettings-opacity') / 100.0;
+            const color = this._settings.get_string('theme-color') || '#232326';
+            const radius = this._settings.get_int('blur-sigma') || 30;
+            const qs = Main.panel?.statusArea?.quickSettings;
+            const menuBox = qs?.menu?.box;
+            if (!menuBox) return;
+
+            menuBox.remove_style_class_name('qpatcher-qs-theme');
+            menuBox.remove_style_class_name('qpatcher-qs-blur');
+            if (menuBox.remove_effect_by_name) {
+                menuBox.remove_effect_by_name('qpatcher-qs-blur');
+            }
+
+            if (style === 'theme-grey') {
+                menuBox.add_style_class_name('qpatcher-qs-theme');
+                menuBox.set_style(`background-color: ${this._hexToRgba(color, opacity)} !important;`);
+            } else if (style === 'blur') {
+                menuBox.add_style_class_name('qpatcher-qs-blur');
+                menuBox.set_style(`background-color: ${this._hexToRgba(color, Math.min(0.65, opacity))} !important;`);
+                const effect = new Shell.BlurEffect({
+                    brightness: 0.85,
+                    radius: radius,
+                    mode: Shell.BlurMode.BACKGROUND,
+                });
+                effect.name = 'qpatcher-qs-blur';
+                menuBox.add_effect(effect);
+            } else {
+                menuBox.set_style(null);
+            }
+
+            if (qs.menu && !qs.menu._qpatcherStyleHooked) {
+                qs.menu._qpatcherStyleHooked = true;
+                qs.menu.connect('open-state-changed', (menu, isOpen) => {
+                    if (isOpen) this._updateQuickSettingsStyle();
+                });
+            }
+        } catch (e) {}
+    }
+
+    _updateNotificationStyle() {
+        try {
+            const style = this._settings.get_string('notification-style');
+            const opacity = this._settings.get_int('notification-opacity') / 100.0;
+            const themeColor = this._settings.get_string('theme-color') || '#232326';
+            const radius = this._settings.get_int('blur-sigma') || 30;
+
+            if (Main.messageTray && !this._messageTrayHooked) {
+                this._messageTrayHooked = true;
+                const origShow = Main.messageTray._showNotification;
+                if (origShow) {
+                    const self = this;
+                    Main.messageTray._showNotification = function() {
+                        const res = origShow.apply(this, arguments);
+                        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                            self._updateNotificationStyle();
+                            return GLib.SOURCE_REMOVE;
+                        });
+                        return res;
+                    };
+                }
+            }
+
+            const banners = [];
+            if (Main.messageTray?._banner) banners.push(Main.messageTray._banner);
+            if (Main.messageTray?._bannerBin?.get_children) {
+                for (const c of Main.messageTray._bannerBin.get_children()) {
+                    if (c && !banners.includes(c)) banners.push(c);
+                }
+            }
+
+            for (const banner of banners) {
+                banner.remove_style_class_name('qpatcher-notification-theme');
+                banner.remove_style_class_name('qpatcher-notification-blur');
+                if (banner.remove_effect_by_name) banner.remove_effect_by_name('qpatcher-banner-blur');
+
+                if (style === 'theme-grey') {
+                    banner.add_style_class_name('qpatcher-notification-theme');
+                    banner.set_style(`background-color: ${this._hexToRgba(themeColor, opacity)} !important;`);
+                } else if (style === 'blur') {
+                    banner.add_style_class_name('qpatcher-notification-blur');
+                    banner.set_style(`background-color: ${this._hexToRgba(themeColor, Math.min(0.5, opacity))} !important;`);
+                    const effect = new Shell.BlurEffect({
+                        brightness: 0.85,
+                        radius: radius,
+                        mode: Shell.BlurMode.BACKGROUND,
+                    });
+                    effect.name = 'qpatcher-banner-blur';
+                    banner.add_effect(effect);
+                } else {
+                    banner.set_style(null);
+                }
+            }
+        } catch (e) {}
+    }
+
+    _syncDashToDockSettings() {
+        try {
+            const visibleOnDesktop = this._settings.get_boolean('dock-always-visible');
+            const intellihide = this._settings.get_boolean('dock-intellihide');
+            const hideTooltips = this._settings.get_boolean('dock-tooltips-hide');
+            const hideBadges = this._settings.get_boolean('dock-notification-badge-hide');
+            const hideShowApps = this._settings.get_boolean('dock-show-apps-hide');
+            const showMounts = this._settings.get_boolean('dock-show-mounts');
+            const runningBar = this._settings.get_boolean('dock-running-indicator-bar');
+            const hideDots = this._settings.get_boolean('dock-running-dots-hide');
+            const iconSize = this._settings.get_int('dock-icon-size');
+            const style = this._settings.get_string('dock-style');
+            const opacity = this._settings.get_int('dock-opacity') / 100.0;
+            const themeColor = this._settings.get_string('theme-color') || '#232326';
+            const accentColor = this._getAccentHex();
+            const blurRadius = this._settings.get_int('blur-sigma') || 30;
+
+            if (visibleOnDesktop) {
+                if (!this._dockManager) {
+                    try {
+                        this._dockManager = new DockManager(this._dockAdapter);
+                    } catch (e) {
+                        console.error('[QPatcher] Error initializing DockManager:', e);
+                    }
+                }
+            } else {
+                if (this._dockManager) {
+                    try {
+                        this._dockManager.destroy();
+                    } catch (e) {
+                        console.error('[QPatcher] Error destroying DockManager:', e);
+                    }
+                    this._dockManager = null;
+                }
+            }
+
+            const d2d = new Gio.Settings({ schema_id: 'org.gnome.shell.extensions.dash-to-dock' });
+            if (visibleOnDesktop) {
+                if (intellihide) {
+                    d2d.set_boolean('dock-fixed', false);
+                    d2d.set_boolean('intellihide', true);
+                    d2d.set_boolean('autohide', false);
+                    d2d.set_string('intellihide-mode', 'FOCUS_APPLICATION_WINDOWS');
+                } else {
+                    d2d.set_boolean('dock-fixed', true);
+                    d2d.set_boolean('intellihide', false);
+                    d2d.set_boolean('autohide', false);
+                }
+            }
+            d2d.set_boolean('show-mounts', showMounts);
+            d2d.set_boolean('show-mounts-only-mounted', false);
+            d2d.set_boolean('hide-tooltip', hideTooltips);
+            d2d.set_boolean('show-icons-notifications-counter', !hideBadges);
+            d2d.set_boolean('show-show-apps-button', !hideShowApps);
+            d2d.set_int('dash-max-icon-size', iconSize);
+            d2d.set_boolean('custom-theme-shrink', true);
+            d2d.set_string('transparency-mode', 'FIXED');
+
+            // Одиночная полоска активности вместо точек
+            if (hideDots) {
+                d2d.set_boolean('custom-theme-customize-running-dots', false);
+            } else if (runningBar) {
+                d2d.set_string('running-indicator-style', 'SOLID');
+                d2d.set_boolean('custom-theme-customize-running-dots', true);
+                d2d.set_string('custom-theme-running-dots-color', accentColor);
+                d2d.set_int('custom-theme-running-dots-border-width', 0);
+            } else {
+                d2d.set_string('running-indicator-style', 'DOTS');
+                d2d.set_boolean('custom-theme-customize-running-dots', false);
+            }
+
+            // Настоящее размытие для подложки дока
+            const findD2DBackgrounds = () => {
+                const backgrounds = [];
+                try {
+                    const stageChildren = global.stage.get_children();
+                    for (const child of stageChildren) {
+                        if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
+                            const slider = child._slider || child.get_children?.()[0];
+                            const content = slider?.get_child?.() || slider;
+                            if (content) {
+                                for (const c of content.get_children?.() || []) {
+                                    if (c.name === 'dash' || (c.has_style_class_name && c.has_style_class_name('dash'))) {
+                                        if (c._background) backgrounds.push(c._background);
+                                        else backgrounds.push(c);
+                                    }
+                                }
+                            }
+                            if (child.dash?._background) backgrounds.push(child.dash._background);
+                        }
+                    }
+                    if (Main.overview?.dash?._background) backgrounds.push(Main.overview.dash._background);
+                } catch (e) {}
+                return backgrounds;
+            };
+
+            const dockBgs = findD2DBackgrounds();
+
+            if (style === 'theme-grey') {
+                for (const bg of dockBgs) {
+                    if (bg?.remove_effect_by_name) bg.remove_effect_by_name('qpatcher-dock-blur');
+                }
+                d2d.set_boolean('custom-background-color', true);
+                d2d.set_string('background-color', themeColor);
+                d2d.set_double('background-opacity', opacity);
+            } else if (style === 'blur') {
+                d2d.set_boolean('custom-background-color', true);
+                d2d.set_string('background-color', themeColor);
+                d2d.set_double('background-opacity', Math.min(0.35, opacity));
+                for (const bg of dockBgs) {
+                    if (!bg.get_effect?.('qpatcher-dock-blur')) {
+                        const effect = new Shell.BlurEffect({
+                            name: 'qpatcher-dock-blur',
+                            mode: Shell.BlurMode.BACKGROUND,
+                            radius: blurRadius,
+                        });
+                        bg.add_effect(effect);
+                    } else {
+                        bg.get_effect('qpatcher-dock-blur').radius = blurRadius;
+                    }
+                }
+            } else {
+                for (const bg of dockBgs) {
+                    if (bg?.remove_effect_by_name) bg.remove_effect_by_name('qpatcher-dock-blur');
+                }
+                d2d.set_boolean('custom-background-color', false);
+                d2d.set_double('background-opacity', opacity);
+            }
+        } catch (e) {}
+    }
+
+    _setupDockMagnification() {
+        try {
+            const dashes = [];
+            if (Main.overview?.dash) dashes.push(Main.overview.dash);
+            if (Main.overview?._overview?._controls?._dash) dashes.push(Main.overview._overview._controls._dash);
+
+            const stageChildren = global.stage.get_children();
+            for (const child of stageChildren) {
+                if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
+                    const slider = child._slider || child.get_children?.()[0];
+                    const content = slider?.get_child?.() || slider;
+                    if (content) {
+                        for (const c of content.get_children?.() || []) {
+                            if (c.name === 'dash' || (c.has_style_class_name && c.has_style_class_name('dash'))) {
+                                dashes.push(c);
+                            }
+                        }
+                    }
+                    if (child.dash) dashes.push(child.dash);
+                }
+            }
+
+            const enableMagnify = this._settings.get_boolean('dock-magnification');
+
+            for (const dash of dashes) {
+                if (dash.clip_to_allocation !== undefined) dash.clip_to_allocation = false;
+                const box = dash._box || dash;
+                if (box.clip_to_allocation !== undefined) box.clip_to_allocation = false;
+
+                if (!box.get_children) continue;
+
+                for (const item of box.get_children()) {
+                    if (item.clip_to_allocation !== undefined) item.clip_to_allocation = false;
+                    const icon = item.child || item;
+                    if (!icon) continue;
+                    if (icon.clip_to_allocation !== undefined) icon.clip_to_allocation = false;
+
+                    icon.set_pivot_point(0.5, 0.5);
+
+                    if (!icon._qpatcherConnected) {
+                        icon._qpatcherConnected = true;
+                        icon.connect('notify::hover', () => {
+                            if (!this._settings.get_boolean('dock-magnification')) return;
+                            if (icon.hover) {
+                                icon.ease({
+                                    scale_x: 1.15,
+                                    scale_y: 1.15,
+                                    duration: 120,
+                                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                                });
+                            } else {
+                                icon.ease({
+                                    scale_x: 1.0,
+                                    scale_y: 1.0,
+                                    duration: 140,
+                                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                                });
+                            }
+                        });
+
+                        icon.connect('button-press-event', () => {
+                            icon.ease({
+                                scale_x: 0.95,
+                                scale_y: 0.95,
+                                duration: 80,
+                                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                                onComplete: () => {
+                                    icon.ease({
+                                        scale_x: icon.hover ? 1.15 : 1.0,
+                                        scale_y: icon.hover ? 1.15 : 1.0,
+                                        duration: 120,
+                                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                                    });
+                                }
+                            });
+                            return Clutter.EVENT_PROPAGATE;
+                        });
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    _applyQuickSettingsFullWidth() {
+        try {
+            const qs = Main.panel?.statusArea?.quickSettings;
+            const grid = qs?.menu?._grid;
+            if (!grid) return;
+
+            // Надежно держим хук на открытие меню и добавление дочерних плиток
+            if (qs.menu && !qs.menu._qpatcherOpenStateConnected) {
+                qs.menu._qpatcherOpenStateConnected = true;
+                qs.menu.connect('open-state-changed', (menu, isOpen) => {
+                    if (isOpen) {
+                        this._applyQuickSettingsFullWidth();
+                    }
+                });
+            }
+
+            if (!grid._qpatcherChildAddedConnected) {
+                grid._qpatcherChildAddedConnected = true;
+                const reapply = () => {
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        this._applyQuickSettingsFullWidth();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                };
+                grid.connect('actor-added', reapply);
+                grid.connect('actor-removed', reapply);
+            }
+
+            const enabled = this._settings.get_boolean('quicksettings-full-width-toggle');
+            const layout = grid.layout_manager;
+            if (!layout) return;
+
+            const toggles = [];
+            for (const child of grid) {
+                if (child.visible && child.has_style_class_name && child.has_style_class_name('quick-toggle')) {
+                    toggles.push(child);
+                }
+            }
+
+            if (toggles.length % 2 !== 0 && enabled) {
+                const lastToggle = toggles[toggles.length - 1];
+                const meta = layout.get_child_meta(grid, lastToggle);
+                if (meta) {
+                    meta.columnSpan = 2;
+                    meta.column_span = 2;
+                }
+            } else {
+                toggles.forEach(toggle => {
+                    const meta = layout.get_child_meta(grid, toggle);
+                    if (meta) {
+                        meta.columnSpan = 1;
+                        meta.column_span = 1;
+                    }
+                });
+            }
+            grid.queue_relayout();
+        } catch (e) {}
+    }
+
+    _updatePanelMonitor() {
+        try {
+            const targetMonitor = this._settings.get_int('topbar-monitor');
+            const panelBox = Main.layoutManager.panelBox;
+            if (!panelBox) return;
+
+            const monitors = Main.layoutManager.monitors;
+            if (targetMonitor < monitors.length) {
+                const mon = monitors[targetMonitor];
+                panelBox.set_position(mon.x, mon.y);
+                panelBox.set_size(mon.width, panelBox.height);
+            }
+        } catch (e) {}
+    }
+
+    _updateNotificationPosition() {
+        try {
+            const tray = Main.messageTray;
+            if (!tray || !tray._bannerBin) return;
+
+            const targetMonitor = this._settings.get_int('notification-monitor');
+            const hAlign = this._settings.get_string('notification-horizontal-alignment');
+
+            // 1. Позиционирование на мониторе
+            const constraints = tray.get_constraints();
+            for (const c of constraints) {
+                if (c && 'primary' in c) {
+                    if (targetMonitor === 0) {
+                        c.primary = true;
+                    } else {
+                        c.primary = false;
+                        c.index = targetMonitor - 1;
+                    }
+                }
+            }
+
+            // 2. Горизонтальное выравнивание
+            tray._bannerBin.x_expand = false;
+            if (hAlign === 'left') {
+                tray.bannerAlignment = Clutter.ActorAlign.START;
+                tray._bannerBin.x_align = Clutter.ActorAlign.START;
+                tray._bannerBin.margin_left = 32;
+                tray._bannerBin.margin_right = 0;
+            } else if (hAlign === 'right') {
+                tray.bannerAlignment = Clutter.ActorAlign.END;
+                tray._bannerBin.x_align = Clutter.ActorAlign.END;
+                tray._bannerBin.margin_left = 0;
+                tray._bannerBin.margin_right = 32;
+            } else {
+                tray.bannerAlignment = Clutter.ActorAlign.CENTER;
+                tray._bannerBin.x_align = Clutter.ActorAlign.CENTER;
+                tray._bannerBin.margin_left = 0;
+                tray._bannerBin.margin_right = 0;
+            }
+            tray.queue_relayout();
+        } catch (e) {}
+    }
+
+    _setupKeyboardManagerHook() {
+        try {
+            const keyboard = Main.panel?.statusArea?.keyboard;
+            if (!keyboard) return;
+
+            const patchLabels = () => {
+                if (!this._settings?.get_boolean('keyboard-uppercase')) return;
+                const updateActorText = (actor) => {
+                    if (!actor) return;
+                    try {
+                        if (actor.get_text && actor.set_text) {
+                            const current = actor.get_text();
+                            if (current && current.length <= 4 && current !== current.toUpperCase()) {
+                                actor.set_text(current.toUpperCase());
+                            }
+                            if (!actor._qpatcherNotifyText) {
+                                actor._qpatcherNotifyText = true;
+                                actor.connectObject('notify::text', () => {
+                                    try {
+                                        if (!this._settings?.get_boolean('keyboard-uppercase')) return;
+                                        const t = actor.get_text();
+                                        if (t && t.length <= 4 && t !== t.toUpperCase()) {
+                                            actor.set_text(t.toUpperCase());
+                                        }
+                                    } catch (e) {}
+                                }, this);
+                            }
+                        }
+                        if (actor.get_children) {
+                            for (const child of actor.get_children()) {
+                                updateActorText(child);
+                            }
+                        }
+                    } catch (e) {}
+                };
+
+                updateActorText(keyboard);
+
+                if (keyboard._indicatorLabels) {
+                    Object.values(keyboard._indicatorLabels).forEach(label => {
+                        updateActorText(label);
+                    });
+                }
+                if (keyboard._inputSources) {
+                    for (const is of keyboard._inputSources) {
+                        if (is?.shortName) is.shortName = is.shortName.toUpperCase();
+                    }
+                }
+                if (keyboard._menuItems) {
+                    Object.values(keyboard._menuItems).forEach(item => {
+                        if (item?.indicator) updateActorText(item.indicator);
+                    });
+                }
+            };
+
+            if (!keyboard._qpatcherStyleHook) {
+                keyboard._qpatcherStyleHook = true;
+                keyboard.connect('style-changed', patchLabels);
+            }
+
+            if (!this._origSetSourceAsActive && keyboard._setSourceAsActive) {
+                this._origSetSourceAsActive = keyboard._setSourceAsActive;
+                const self = this;
+                keyboard._setSourceAsActive = function(source) {
+                    if (self._settings?.get_boolean('keyboard-uppercase') && source?.shortName) {
+                        source.shortName = source.shortName.toUpperCase();
+                    }
+                    self._origSetSourceAsActive.call(this, source);
+                    patchLabels();
+                };
+            }
+
+            if (!this._origCurrentSourceChanged && keyboard._currentSourceChanged) {
+                this._origCurrentSourceChanged = keyboard._currentSourceChanged;
+                const self = this;
+                keyboard._currentSourceChanged = function(manager, oldSource) {
+                    self._origCurrentSourceChanged.call(this, manager, oldSource);
+                    patchLabels();
+                };
+            }
+
+            if (!this._origSourcesChanged && keyboard._sourcesChanged) {
+                this._origSourcesChanged = keyboard._sourcesChanged;
+                const self = this;
+                keyboard._sourcesChanged = function() {
+                    self._origSourcesChanged.call(this);
+                    patchLabels();
+                };
+            }
+
+            const mgr = keyboard._inputSourceManager;
+            if (mgr) {
+                const id = mgr.connect('current-source-changed', () => {
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        patchLabels();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                });
+                this._signals.push({ obj: mgr, id });
+            }
+
+            patchLabels();
+        } catch (e) {}
+    }
+
+    _updateKeyboardLayoutText() {
+        if (!this._settings.get_boolean('keyboard-uppercase')) return;
+        try {
+            const keyboard = Main.panel?.statusArea?.keyboard;
+            if (!keyboard) return;
+
+            if (keyboard._indicatorLabels) {
+                Object.values(keyboard._indicatorLabels).forEach(label => {
+                    if (label?.get_text && label?.set_text) {
+                        const t = label.get_text();
+                        if (t) label.set_text(t.toUpperCase());
+                    }
+                });
+            }
+
+            const findAndUppercase = (actor) => {
+                if (actor.get_text && actor.set_text) {
+                    const text = actor.get_text();
+                    if (text && text.length <= 4) {
+                        actor.set_text(text.toUpperCase());
+                    }
+                }
+                if (actor.get_children) {
+                    for (const c of actor.get_children()) findAndUppercase(c);
+                }
+            };
+            findAndUppercase(keyboard);
+        } catch (e) {}
+    }
+
+    _setupClassPrototypePatches() {
+        try {
+            if (WindowPreview?.WindowPreview?.prototype) {
+                const proto = WindowPreview.WindowPreview.prototype;
+                if (!this._origShowOverlay && proto.showOverlay) {
+                    this._origShowOverlay = proto.showOverlay;
+                }
+                if (!this._origWindowCanClose && proto._windowCanClose) {
+                    this._origWindowCanClose = proto._windowCanClose;
+                }
+                if (!this._origGetCaption && proto._getCaption) {
+                    this._origGetCaption = proto._getCaption;
+                }
+                if (!this._origUpdateIconScale && proto._updateIconScale) {
+                    this._origUpdateIconScale = proto._updateIconScale;
+                }
+
+                const self = this;
+                proto.showOverlay = function(animate) {
+                    if (self._origShowOverlay) self._origShowOverlay.call(this, animate);
+                    if (self._settings?.get_boolean('overview-window-title-hide') && this._title) {
+                        this._title.visible = false;
+                        this._title.opacity = 0;
+                    }
+                };
+
+                proto._windowCanClose = function() {
+                    if (self._settings?.get_boolean('overview-window-close-button-hide')) {
+                        return false;
+                    }
+                    return self._origWindowCanClose ? self._origWindowCanClose.apply(this, arguments) : true;
+                };
+
+                proto._getCaption = function() {
+                    if (self._settings?.get_boolean('overview-window-title-hide')) {
+                        if (this._title) {
+                            this._title.visible = false;
+                            this._title.opacity = 0;
+                        }
+                        return '';
+                    }
+                    if (this._title) this._title.visible = true;
+                    return self._origGetCaption ? self._origGetCaption.apply(this, arguments) : '';
+                };
+
+                proto._updateIconScale = function() {
+                    if (self._origUpdateIconScale) {
+                        self._origUpdateIconScale.apply(this, arguments);
+                    }
+                    if (self._settings?.get_boolean('overview-window-icon-hide') && this._icon) {
+                        this._icon.opacity = 0;
+                        this._icon.visible = false;
+                    }
+                };
+            }
+
+            if (Dash?.DashItemContainer?.prototype) {
+                const proto = Dash.DashItemContainer.prototype;
+                if (!this._origShowLabel && proto.showLabel) {
+                    this._origShowLabel = proto.showLabel;
+                    const self = this;
+                    proto.showLabel = function() {
+                        if (self._settings?.get_boolean('dock-tooltips-hide')) {
+                            return;
+                        }
+                        return self._origShowLabel.apply(this, arguments);
+                    };
+                }
+            }
+        } catch (e) {}
+    }
+
+    _restoreClassPrototypePatches() {
+        try {
+            if (WindowPreview?.WindowPreview?.prototype) {
+                const proto = WindowPreview.WindowPreview.prototype;
+                if (this._origShowOverlay) {
+                    proto.showOverlay = this._origShowOverlay;
+                    this._origShowOverlay = null;
+                }
+                if (this._origWindowCanClose) {
+                    proto._windowCanClose = this._origWindowCanClose;
+                    this._origWindowCanClose = null;
+                }
+                if (this._origGetCaption) {
+                    proto._getCaption = this._origGetCaption;
+                    this._origGetCaption = null;
+                }
+                if (this._origUpdateIconScale) {
+                    proto._updateIconScale = this._origUpdateIconScale;
+                    this._origUpdateIconScale = null;
+                }
+            }
+            if (this._origShowLabel && Dash?.DashItemContainer?.prototype) {
+                Dash.DashItemContainer.prototype.showLabel = this._origShowLabel;
+                this._origShowLabel = null;
+            }
+        } catch (e) {}
+    }
+
+    _setupScreenShieldPatch() {
+        try {
+            if (Main.screenShield && !this._origScreenShieldActivate) {
+                this._origScreenShieldActivate = Main.screenShield.activate;
+                const self = this;
+                Main.screenShield.activate = function(animate) {
+                    if (!self._settings?.get_boolean('lockscreen-prevent-blank')) {
+                        return self._origScreenShieldActivate.call(this, animate);
+                    }
+
+                    if (this._activationTime === 0)
+                        this._activationTime = GLib.get_monotonic_time();
+
+                    if (!this._ensureUnlockDialog(true))
+                        return;
+
+                    this.actor.show();
+
+                    if (Main.sessionMode.currentMode !== 'unlock-dialog') {
+                        this._isGreeter = Main.sessionMode.isGreeter;
+                        if (!this._isGreeter)
+                            Main.sessionMode.pushMode('unlock-dialog');
+                    }
+
+                    this._resetLockScreen({
+                        animateLockScreen: animate,
+                        fadeToBlack: false,
+                    });
+                };
+            }
+        } catch (e) {}
+    }
+
+    _restoreScreenShieldPatch() {
+        try {
+            if (this._origScreenShieldActivate && Main.screenShield) {
+                Main.screenShield.activate = this._origScreenShieldActivate;
+                this._origScreenShieldActivate = null;
+            }
+        } catch (e) {}
+    }
+
+    _applyDashToDockSeparatorFix(show) {
+        try {
+            const actors = global.stage.get_children();
+            for (const actor of actors) {
+                if (actor.name === 'dashtodockContainer' || (actor.has_style_class_name && actor.has_style_class_name('dashtodockContainer'))) {
+                    this._toggleChildrenSeparators(actor, show);
+                }
+            }
+        } catch (e) {}
+    }
+
+    _toggleChildrenSeparators(parent, show) {
+        if (!parent || !parent.get_children) return;
+        for (const child of parent.get_children()) {
+            if (child.has_style_class_name && child.has_style_class_name('dash-separator')) {
+                child.visible = show;
+                child.opacity = show ? 255 : 0;
+            }
+            this._toggleChildrenSeparators(child, show);
+        }
+    }
+
+    disable() {
+        for (const signal of this._signals) {
+            signal.obj.disconnect(signal.id);
+        }
+        this._signals = [];
+
+        // Восстанавливаем оригинальные методы клавиатуры
+        if (this._origSetSourceAsActive && Main.panel?.statusArea?.keyboard) {
+            Main.panel.statusArea.keyboard._setSourceAsActive = this._origSetSourceAsActive;
+            this._origSetSourceAsActive = null;
+        }
+        if (this._origCurrentSourceChanged && Main.panel?.statusArea?.keyboard) {
+            Main.panel.statusArea.keyboard._currentSourceChanged = this._origCurrentSourceChanged;
+            this._origCurrentSourceChanged = null;
+        }
+        if (this._origSourcesChanged && Main.panel?.statusArea?.keyboard) {
+            Main.panel.statusArea.keyboard._sourcesChanged = this._origSourcesChanged;
+            this._origSourcesChanged = null;
+        }
+
+        this._restoreClassPrototypePatches();
+        this._restoreScreenShieldPatch();
+        this._destroyOverviewBlur();
+
+        const uiGroup = this._getUiGroup();
+        const classesToRemove = [
+            'qpatcher-hide-panel-notification-icon',
+            'qpatcher-hide-a11y',
+            'qpatcher-hide-dock-notification-badge',
+            'qpatcher-badge-accent',
+            'qpatcher-recolor-menus',
+            'qpatcher-menus-theme',
+            'qpatcher-menus-blur',
+            'qpatcher-notification-theme',
+            'qpatcher-notification-blur',
+            'qpatcher-no-dock-separator',
+            'qpatcher-no-dock-show-apps',
+            'qpatcher-no-dock-running-dots',
+            'qpatcher-no-dock-tooltips',
+            'qpatcher-overview-blur-active',
+            'qpatcher-no-window-close',
+            'qpatcher-no-window-icon',
+            'qpatcher-no-window-title',
+            'qpatcher-no-overview-search',
+            'qpatcher-no-overview-thumbnails',
+            'qpatcher-no-notification-close',
+            'qpatcher-hide-calendar',
+            'qpatcher-hide-calendar-column',
+            'qpatcher-compact-empty-notifications'
+        ];
+        if (uiGroup) {
+            classesToRemove.forEach(cls => uiGroup.remove_style_class_name(cls));
+        }
+
+        if (this._dynamicStylesheetLoaded) {
+            try {
+                const cssPath = GLib.build_filenamev([this.path, 'qpatcher-dynamic.css']);
+                const file = Gio.File.new_for_path(cssPath);
+                const theme = St.ThemeContext.get_for_stage(global.stage)?.get_theme();
+                if (theme) theme.unload_stylesheet(file);
+            } catch (e) {}
+            this._dynamicStylesheetLoaded = false;
+        }
+
+        if (Main.panel) {
+            Main.panel.visible = true;
+            Main.panel.opacity = 255;
+            Main.panel.set_style('');
+            Main.panel.remove_style_class_name('qpatcher-topbar-transparent');
+            Main.panel.remove_style_class_name('qpatcher-topbar-theme');
+            Main.panel.remove_style_class_name('qpatcher-topbar-blur');
+            Main.panel.remove_style_class_name('qpatcher-topbar-transparent-in-overview');
+            Main.panel.remove_style_class_name('qpatcher-blurred');
+            if (Main.panel.remove_effect_by_name) Main.panel.remove_effect_by_name('qpatcher-panel-blur');
+            if (Main.panel.statusArea?.quickSettings?.container) {
+                Main.panel.statusArea.quickSettings.container.visible = true;
+            }
+        }
+
+        try {
+            const stageChildren = global.stage.get_children();
+            for (const child of stageChildren) {
+                if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
+                    const slider = child._slider || child.get_children?.()[0];
+                    const content = slider?.get_child?.() || slider;
+                    if (content) {
+                        for (const c of content.get_children?.() || []) {
+                            if (c._background?.remove_effect_by_name) c._background.remove_effect_by_name('qpatcher-dock-blur');
+                            if (c.remove_effect_by_name) c.remove_effect_by_name('qpatcher-dock-blur');
+                        }
+                    }
+                    if (child.dash?._background?.remove_effect_by_name) child.dash._background.remove_effect_by_name('qpatcher-dock-blur');
+                }
+            }
+        } catch (e) {}
+
+        const dateMenu = Main.panel?.statusArea?.dateMenu;
+        if (dateMenu) {
+            const calendarCol = dateMenu._calendar?.get_parent() || dateMenu._calendarColumn;
+            if (calendarCol) calendarCol.visible = true;
+            if (dateMenu._calendar) dateMenu._calendar.visible = true;
+            if (dateMenu._date) dateMenu._date.visible = true;
+            if (dateMenu.menu?.box) {
+                dateMenu.menu.box.set_style(null);
+                dateMenu.menu.box.remove_style_class_name('qpatcher-datemenu-theme');
+                dateMenu.menu.box.remove_style_class_name('qpatcher-datemenu-blur');
+                if (dateMenu.menu.box.remove_effect_by_name) dateMenu.menu.box.remove_effect_by_name('qpatcher-datemenu-blur');
+            }
+        }
+
+        const qs = Main.panel?.statusArea?.quickSettings;
+        if (qs) {
+            const systemItem = qs._system?.quickSettingsItems?.[0];
+            const box = systemItem?.child;
+            if (box?.get_children) {
+                for (const child of box.get_children()) {
+                    child.visible = true;
+                }
+            }
+            if (qs.menu?.box) {
+                qs.menu.box.set_style(null);
+                qs.menu.box.remove_style_class_name('qpatcher-qs-theme');
+                qs.menu.box.remove_style_class_name('qpatcher-qs-blur');
+                if (qs.menu.box.remove_effect_by_name) qs.menu.box.remove_effect_by_name('qpatcher-qs-blur');
+            }
+        }
+
+        if (Main.messageTray?._bannerBin) {
+            Main.messageTray._bannerBin.x_align = Clutter.ActorAlign.CENTER;
+            Main.messageTray._bannerBin.margin_left = 0;
+            Main.messageTray._bannerBin.margin_right = 0;
+            const constraints = Main.messageTray.get_constraints();
+            for (const c of constraints) {
+                if (c && 'primary' in c) {
+                    c.primary = true;
+                }
+            }
+            Main.messageTray.queue_relayout();
+        }
+
+        this._applyDashToDockSeparatorFix(true);
+        this._cleanupScreenshotCustomizations();
+
+        if (this._dockManager) {
+            try {
+                this._dockManager.destroy();
+            } catch (e) {
+                console.error('[QPatcher] Error destroying DockManager on disable:', e);
+            }
+            this._dockManager = null;
+        }
+
+        this._settings = null;
+        this._interfaceSettings = null;
+        this._a11ySettings = null;
+        this._shellSettings = null;
+    }
+
+    // ==========================================
+    // СКРИНШОТЫ (SCREENSHOTS CUSTOMIZATION)
+    // ==========================================
+    _setupScreenshotCustomizations() {
+        if (!Main.screenshotUI) return;
+
+        if (!this._origSaveScreenshot) {
+            this._origSaveScreenshot = Main.screenshotUI._saveScreenshot;
+        }
+
+        const self = this;
+
+        Main.screenshotUI._saveScreenshot = async function() {
+            let file = null;
+
+            if (this._selectionButton.checked || this._screenButton.checked) {
+                const content = this._stageScreenshot.get_content();
+                if (!content)
+                    return;
+
+                const texture = content.get_texture();
+                const geometry = this._getSelectedGeometry(true);
+
+                let cursorTexture = this._cursor.content?.get_texture();
+                if (!this._cursor.visible)
+                    cursorTexture = null;
+
+                try {
+                    file = await self._captureScreenshotCustom(
+                        texture, geometry, this._scale,
+                        {
+                            texture: cursorTexture ?? null,
+                            x: this._cursor.x * this._scale,
+                            y: this._cursor.y * this._scale,
+                            scale: this._cursorScale,
+                        }
+                    );
+                } catch (e) {
+                    console.error('[QPatcher] Error capturing area/screen screenshot:', e);
+                }
+            } else if (this._windowButton.checked) {
+                const window =
+                    this._windowSelectors.flatMap(selector => selector.windows())
+                                         .find(win => win.checked);
+                if (!window)
+                    return;
+
+                const content = window.windowContent;
+                if (!content)
+                    return;
+
+                const texture = content.get_texture();
+
+                let cursorTexture = window.getCursorTexture()?.get_texture();
+                if (!this._cursor.visible)
+                    cursorTexture = null;
+
+                try {
+                    file = await self._captureScreenshotCustom(
+                        texture,
+                        null,
+                        window.bufferScale,
+                        {
+                            texture: cursorTexture ?? null,
+                            x: window.cursorPoint.x * window.bufferScale,
+                            y: window.cursorPoint.y * window.bufferScale,
+                            scale: this._cursorScale,
+                        }
+                    );
+                } catch (e) {
+                    console.error('[QPatcher] Error capturing window screenshot:', e);
+                }
+            }
+
+            if (file)
+                this.emit('screenshot-taken', file);
+        };
+
+        try {
+            const soundPlayer = global.display?.get_sound_player();
+            if (soundPlayer && !this._origPlayFromFile) {
+                this._origPlayFromFile = soundPlayer.play_from_file;
+                soundPlayer.play_from_file = function(file, event, cancellable) {
+                    const filePath = file?.get_path ? file.get_path() : '';
+                    if (filePath && filePath.endsWith('screen-capture.oga')) {
+                        const soundMode = self._settings?.get_string('screenshot-sound') || 'bubble';
+                        if (soundMode === 'disabled') {
+                            return;
+                        } else if (soundMode === 'bubble') {
+                            const bubbleFile = Gio.File.new_for_path('/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga');
+                            return self._origPlayFromFile.call(this, bubbleFile, event, cancellable);
+                        }
+                    }
+                    return self._origPlayFromFile.call(this, file, event, cancellable);
+                };
+            }
+        } catch (e) {
+            console.warn('[QPatcher] Sound player hook skipped:', e);
+        }
+
+        if (Main.screenshotUI._areaSelector) {
+            const areaSelector = Main.screenshotUI._areaSelector;
+
+            this._dragStartedSignalId = areaSelector.connect('drag-started', () => {
+                if (areaSelector._topLeftHandle) areaSelector._topLeftHandle.visible = true;
+                if (areaSelector._topRightHandle) areaSelector._topRightHandle.visible = true;
+                if (areaSelector._bottomLeftHandle) areaSelector._bottomLeftHandle.visible = true;
+                if (areaSelector._bottomRightHandle) areaSelector._bottomRightHandle.visible = true;
+            });
+
+            this._dragEndedSignalId = areaSelector.connect('drag-ended', () => {
+                if (!this._settings?.get_boolean('screenshot-quick-capture')) return;
+                if (!Main.screenshotUI?.visible || !Main.screenshotUI?._selectionButton?.checked) return;
+
+                const [x, y, w, h] = areaSelector.getGeometry();
+                if (w > 20 && h > 20) {
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        if (Main.screenshotUI?.visible && Main.screenshotUI?._selectionButton?.checked) {
+                            Main.screenshotUI._onCaptureButtonClicked().catch(err => console.error(err));
+                        }
+                        return GLib.SOURCE_REMOVE;
+                    });
+                }
+            });
+        }
+
+        const updatePanelVisibility = () => {
+            const hidePanel = this._settings?.get_boolean('screenshot-hide-panel') ?? false;
+            if (Main.screenshotUI) {
+                if (hidePanel) {
+                    Main.screenshotUI.add_style_class_name('qpatcher-screenshot-hide-panel');
+                    if (Main.screenshotUI._panel) Main.screenshotUI._panel.visible = false;
+                    if (Main.screenshotUI._closeButton) Main.screenshotUI._closeButton.visible = false;
+                } else {
+                    Main.screenshotUI.remove_style_class_name('qpatcher-screenshot-hide-panel');
+                    if (Main.screenshotUI._panel) Main.screenshotUI._panel.visible = true;
+                    if (Main.screenshotUI._closeButton) Main.screenshotUI._closeButton.visible = true;
+                }
+            }
+        };
+
+        this._screenshotHidePanelSignalId = this._settings.connect('changed::screenshot-hide-panel', updatePanelVisibility);
+        updatePanelVisibility();
+
+        this._screenshotUiOpenSignalId = Main.screenshotUI.connect('notify::visible', () => {
+            if (Main.screenshotUI.visible) {
+                updatePanelVisibility();
+
+                // Сброс области выделения по умолчанию (начинаем с чистого экрана)
+                if (this._settings?.get_boolean('screenshot-clear-selection')) {
+                    const areaSelector = Main.screenshotUI._areaSelector;
+                    if (areaSelector) {
+                        areaSelector._startX = -1;
+                        areaSelector._startY = -1;
+                        areaSelector._lastX = -1;
+                        areaSelector._lastY = -1;
+                        areaSelector._areaIndicator?.setSelectionRect(0, 0, 0, 0);
+                        if (areaSelector._topLeftHandle) areaSelector._topLeftHandle.visible = false;
+                        if (areaSelector._topRightHandle) areaSelector._topRightHandle.visible = false;
+                        if (areaSelector._bottomLeftHandle) areaSelector._bottomLeftHandle.visible = false;
+                        if (areaSelector._bottomRightHandle) areaSelector._bottomRightHandle.visible = false;
+                    }
+                }
+            }
+        });
+    }
+
+    async _captureScreenshotCustom(texture, geometry, scale, cursor) {
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        const [x, y, w, h] = geometry ?? [0, 0, -1, -1];
+        if (cursor === null) {
+            cursor = { texture: null, x: 0, y: 0, scale: 1 };
+        }
+
+        const soundMode = this._settings?.get_string('screenshot-sound') || 'bubble';
+        if (soundMode === 'bubble') {
+            const bubbleFile = Gio.File.new_for_path('/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga');
+            global.display.get_sound_player().play_from_file(bubbleFile, 'Screenshot taken', null);
+        } else if (soundMode === 'default') {
+            const defaultFile = Gio.File.new_for_path(`${global.datadir}/sounds/screen-capture.oga`);
+            global.display.get_sound_player().play_from_file(defaultFile, 'Screenshot taken', null);
+        }
+
+        const pixbuf = await Shell.Screenshot.composite_to_stream(
+            texture,
+            x, y, w, h,
+            scale,
+            cursor.texture, cursor.x, cursor.y, cursor.scale,
+            stream
+        );
+
+        stream.close(null);
+        return this._storeScreenshotCustom(stream.steal_as_bytes(), pixbuf);
+    }
+
+    _storeScreenshotCustom(bytes, pixbuf) {
+        const clipboard = St.Clipboard.get_default();
+        clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', bytes);
+
+        const time = GLib.DateTime.new_now_local();
+        let file = null;
+
+        const clipboardOnly = this._settings?.get_boolean('screenshot-clipboard-only') ?? false;
+        const filenameFormat = this._settings?.get_string('screenshot-filename-format') || 'date';
+
+        if (!clipboardOnly) {
+            const picturesDir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) || GLib.get_home_dir();
+            const saveLocation = this._settings?.get_string('screenshot-save-location') || 'subfolder';
+
+            let dir;
+            if (saveLocation === 'pictures') {
+                dir = Gio.File.new_for_path(picturesDir);
+            } else {
+                let screenshotsSubdir = 'Снимки экрана';
+                const testDir = Gio.File.new_for_path(GLib.build_filenamev([picturesDir, screenshotsSubdir]));
+                if (!testDir.query_exists(null)) {
+                    const testEn = Gio.File.new_for_path(GLib.build_filenamev([picturesDir, 'Screenshots']));
+                    if (testEn.query_exists(null)) screenshotsSubdir = 'Screenshots';
+                }
+
+                dir = Gio.File.new_for_path(GLib.build_filenamev([picturesDir, screenshotsSubdir]));
+                try {
+                    dir.make_directory_with_parents(null);
+                } catch (e) {
+                    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) {
+                        console.error('[QPatcher] Error creating screenshots directory:', e);
+                    }
+                }
+            }
+
+            let baseName = '';
+            if (filenameFormat === 'random') {
+                let code = '';
+                for (let i = 0; i < 6; i++) {
+                    code += Math.floor(Math.random() * 10).toString();
+                }
+                baseName = code;
+            } else if (filenameFormat === 'date') {
+                baseName = time.format('%Y-%m-%d_%H.%M.%S');
+            } else {
+                const timestamp = time.format('%Y-%m-%d %H-%M-%S');
+                baseName = `Снимок экрана от ${timestamp}`;
+            }
+
+            file = Gio.File.new_for_path(GLib.build_filenamev([
+                dir.get_path(), `${baseName}.png`,
+            ]));
+
+            let suffix = 1;
+            while (file.query_exists(null)) {
+                file = Gio.File.new_for_path(GLib.build_filenamev([
+                    dir.get_path(), `${baseName}-${suffix}.png`,
+                ]));
+                suffix++;
+            }
+
+            try {
+                const outStream = file.create(Gio.FileCreateFlags.NONE, null);
+                outStream.write_bytes(bytes, null);
+                outStream.close(null);
+            } catch (e) {
+                console.error('[QPatcher] Failed to write screenshot file:', e);
+            }
+
+            this._saveRecentScreenshot(file);
+        }
+
+        this._showScreenshotNotification(time, pixbuf, file, clipboardOnly);
+
+        return file;
+    }
+
+    _saveRecentScreenshot(screenshotFile) {
+        if (!screenshotFile) return;
+        try {
+            const recentFile = GLib.build_filenamev([GLib.get_user_data_dir(), 'recently-used.xbel']);
+            const uri = screenshotFile.get_uri();
+            const bookmarks = new GLib.BookmarkFile();
+            try {
+                bookmarks.load_from_file(recentFile);
+            } catch (e) {
+                if (!e.matches(GLib.FileError, GLib.FileError.NOENT))
+                    return;
+            }
+            bookmarks.add_application(uri, GLib.get_prgname(), 'gio open %u');
+            bookmarks.to_file(recentFile);
+        } catch (e) {}
+    }
+
+    _showScreenshotNotification(time, pixbuf, file, clipboardOnly) {
+        let icon = null;
+        try {
+            if (pixbuf) {
+                const coglContext = global.stage.context.get_backend().get_cogl_context();
+                const pixels = pixbuf.read_pixel_bytes();
+                const content = St.ImageContent.new_with_preferred_size(pixbuf.width, pixbuf.height);
+                content.set_bytes(
+                    coglContext,
+                    pixels,
+                    Cogl.PixelFormat.RGBA_8888,
+                    pixbuf.width,
+                    pixbuf.height,
+                    pixbuf.rowstride
+                );
+                icon = content;
+            }
+        } catch (e) {}
+
+        if (!this._screenshotSource) {
+            this._screenshotSource = new MessageTray.Source({
+                title: 'Снимок экрана',
+                iconName: 'screenshooter-symbolic',
+            });
+            this._screenshotSource.connect('destroy', () => {
+                this._screenshotSource = null;
+            });
+            Main.messageTray.add(this._screenshotSource);
+        }
+
+        const title = clipboardOnly ? 'Снимок скопирован' : 'Снимок сохранён';
+        const body = clipboardOnly
+            ? 'Изображение скопировано в буфер обмена'
+            : 'Изображение сохранено и скопировано в буфер обмена';
+
+        const notification = new MessageTray.Notification({
+            source: this._screenshotSource,
+            title,
+            body,
+            datetime: time,
+            gicon: icon,
+            isTransient: true,
+        });
+
+        if (file && !clipboardOnly) {
+            notification.addAction('Показать в файлах', () => {
+                try {
+                    const app = Gio.app_info_get_default_for_type('inode/directory', false);
+                    if (app) app.launch([file], null);
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        }
+
+        this._screenshotSource.addNotification(notification);
+    }
+
+    _cleanupScreenshotCustomizations() {
+        if (Main.screenshotUI) {
+            if (this._origSaveScreenshot) {
+                Main.screenshotUI._saveScreenshot = this._origSaveScreenshot;
+                this._origSaveScreenshot = null;
+            }
+            if (this._dragStartedSignalId && Main.screenshotUI._areaSelector) {
+                Main.screenshotUI._areaSelector.disconnect(this._dragStartedSignalId);
+                this._dragStartedSignalId = null;
+            }
+            if (this._dragEndedSignalId && Main.screenshotUI._areaSelector) {
+                Main.screenshotUI._areaSelector.disconnect(this._dragEndedSignalId);
+                this._dragEndedSignalId = null;
+            }
+            if (this._screenshotUiOpenSignalId) {
+                Main.screenshotUI.disconnect(this._screenshotUiOpenSignalId);
+                this._screenshotUiOpenSignalId = null;
+            }
+            if (this._screenshotHidePanelSignalId) {
+                this._settings?.disconnect(this._screenshotHidePanelSignalId);
+                this._screenshotHidePanelSignalId = null;
+            }
+            Main.screenshotUI.remove_style_class_name('qpatcher-screenshot-hide-panel');
+            if (Main.screenshotUI._panel) Main.screenshotUI._panel.visible = true;
+            if (Main.screenshotUI._closeButton) Main.screenshotUI._closeButton.visible = true;
+        }
+
+        try {
+            const soundPlayer = global.display?.get_sound_player();
+            if (soundPlayer && this._origPlayFromFile) {
+                soundPlayer.play_from_file = this._origPlayFromFile;
+                this._origPlayFromFile = null;
+            }
+        } catch (e) {}
+
+        if (this._screenshotSource) {
+            this._screenshotSource.destroy();
+            this._screenshotSource = null;
+        }
+    }
+}

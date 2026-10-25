@@ -1,0 +1,451 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.qpatcher" path="/org/gnome/shell/extensions/qpatcher/">
+
+    <!-- ========================================== -->
+    <!-- 1. ТОПБАР (TOPBAR)                         -->
+    <!-- ========================================== -->
+    <key name="topbar-monitor" type="i">
+      <default>0</default>
+      <summary>Topbar Monitor</summary>
+      <description>0 for primary, or monitor index</description>
+    </key>
+
+    <key name="topbar-style" type="s">
+      <default>'default'</default>
+      <summary>Topbar Style</summary>
+      <description>'default', 'theme-grey', 'blur'</description>
+    </key>
+
+    <key name="topbar-opacity" type="i">
+      <default>100</default>
+      <summary>Topbar Opacity</summary>
+      <description>Opacity percentage 0 to 100</description>
+    </key>
+
+    <key name="topbar-transparent-in-overview" type="b">
+      <default>true</default>
+      <summary>Transparent Topbar in Overview</summary>
+      <description>Smoothly make panel background transparent in overview</description>
+    </key>
+
+    <key name="keyboard-uppercase" type="b">
+      <default>true</default>
+      <summary>Uppercase Keyboard Layout</summary>
+      <description>Show layout text in uppercase (RU instead of ru)</description>
+    </key>
+
+    <key name="clock-show-weekday" type="b">
+      <default>false</default>
+      <summary>Show Weekday in Clock</summary>
+      <description>Show day of week alongside time</description>
+    </key>
+
+    <key name="clock-show-seconds" type="b">
+      <default>false</default>
+      <summary>Show Seconds in Clock</summary>
+      <description>Show seconds in panel clock</description>
+    </key>
+
+    <key name="panel-visibility" type="b">
+      <default>true</default>
+      <summary>Panel Visibility</summary>
+      <description>Show or hide top panel</description>
+    </key>
+
+    <key name="activities-button" type="b">
+      <default>true</default>
+      <summary>Activities Button</summary>
+      <description>Show or hide activities/workspaces button</description>
+    </key>
+
+    <key name="clock-menu" type="b">
+      <default>true</default>
+      <summary>Clock Menu</summary>
+      <description>Show or hide top panel clock</description>
+    </key>
+
+    <key name="accessibility-menu" type="b">
+      <default>true</default>
+      <summary>Accessibility Menu</summary>
+      <description>Show or hide universal access icon on panel</description>
+    </key>
+
+    <key name="quicksettings-button" type="b">
+      <default>true</default>
+      <summary>Quick Settings Button</summary>
+      <description>Show or hide quick settings button on panel</description>
+    </key>
+
+
+    <!-- ========================================== -->
+    <!-- 2. ДОК (DASH & DOCK)                       -->
+    <!-- ========================================== -->
+    <key name="dock-separator-hide" type="b">
+      <default>false</default>
+      <summary>Hide Dock Separator</summary>
+      <description>Hide running/favorites separator</description>
+    </key>
+
+    <key name="dock-show-apps-hide" type="b">
+      <default>false</default>
+      <summary>Hide Show Applications Button</summary>
+      <description>Hide grid icon in Dash and Dock</description>
+    </key>
+
+    <key name="dock-running-dots-hide" type="b">
+      <default>false</default>
+      <summary>Hide Running Dots</summary>
+      <description>Hide running app indicator dots</description>
+    </key>
+
+    <key name="dock-tooltips-hide" type="b">
+      <default>false</default>
+      <summary>Hide Dock Tooltips</summary>
+      <description>Disable hovering tooltips on dock icons</description>
+    </key>
+
+    <key name="dock-notification-badge-hide" type="b">
+      <default>false</default>
+      <summary>Hide Dock Notification Badge</summary>
+      <description>Hide unread notification counter on dock icons</description>
+    </key>
+
+    <key name="dock-show-mounts" type="b">
+      <default>true</default>
+      <summary>Show Removable Mounts</summary>
+      <description>Show mounted drives and USB devices on dock</description>
+    </key>
+
+    <key name="dock-always-visible" type="b">
+      <default>false</default>
+      <summary>Always Visible Dock on Desktop</summary>
+      <description>Show dock on desktop</description>
+    </key>
+
+    <key name="dock-intellihide" type="b">
+      <default>true</default>
+      <summary>Intellihide Dock</summary>
+      <description>Hide dock when windows overlap</description>
+    </key>
+
+    <key name="dock-magnification" type="b">
+      <default>false</default>
+      <summary>Dock Magnification</summary>
+      <description>Magnify icons on hover like macOS</description>
+    </key>
+
+    <key name="dock-notification-badge-accent" type="b">
+      <default>true</default>
+      <summary>Accent Color Notification Badge</summary>
+      <description>Use system accent color instead of red for notification badges</description>
+    </key>
+
+    <key name="dock-running-indicator-bar" type="b">
+      <default>true</default>
+      <summary>Single Running Indicator Bar</summary>
+      <description>Draw a single sleek bar under active applications instead of dots</description>
+    </key>
+
+    <key name="dock-icon-size" type="i">
+      <default>48</default>
+      <summary>Dock Icon Size</summary>
+      <description>Icon size in pixels</description>
+    </key>
+
+    <key name="dock-style" type="s">
+      <default>'blur'</default>
+      <summary>Dock Style</summary>
+      <description>'default', 'theme-grey', 'blur'</description>
+    </key>
+
+    <key name="dock-opacity" type="i">
+      <default>100</default>
+      <summary>Dock Opacity</summary>
+      <description>Opacity percentage 0 to 100</description>
+    </key>
+
+
+    <!-- ========================================== -->
+    <!-- 3. ОБЗОР (OVERVIEW)                        -->
+    <!-- ========================================== -->
+    <key name="overview-style" type="s">
+      <default>'default'</default>
+      <summary>Overview Style</summary>
+      <description>'default', 'theme-grey', 'blur'</description>
+    </key>
+
+    <key name="overview-opacity" type="i">
+      <default>100</default>
+      <summary>Overview Opacity</summary>
+      <description>Opacity percentage 0 to 100</description>
+    </key>
+
+    <key name="overview-window-close-button-hide" type="b">
+      <default>false</default>
+      <summary>Hide Window Close Button</summary>
+      <description>Hide X close button on overview window previews</description>
+    </key>
+
+    <key name="overview-window-icon-hide" type="b">
+      <default>false</default>
+      <summary>Hide Window Icon</summary>
+      <description>Hide application icon on window previews</description>
+    </key>
+
+    <key name="overview-window-title-hide" type="b">
+      <default>false</default>
+      <summary>Hide Window Title</summary>
+      <description>Hide title captions on window previews</description>
+    </key>
+
+    <key name="overview-search-hide" type="b">
+      <default>false</default>
+      <summary>Hide Overview Search</summary>
+      <description>Hide search entry in overview</description>
+    </key>
+
+    <key name="overview-workspace-switcher-hide" type="b">
+      <default>false</default>
+      <summary>Hide Workspace Switcher</summary>
+      <description>Hide thumbnails strip in overview</description>
+    </key>
+
+
+    <!-- ========================================== -->
+    <!-- 4. УВЕДОМЛЕНИЯ (NOTIFICATIONS)             -->
+    <!-- ========================================== -->
+    <key name="notification-monitor" type="i">
+      <default>0</default>
+      <summary>Notification Monitor</summary>
+      <description>0 for primary, or 1, 2, ... for specific monitor</description>
+    </key>
+
+    <key name="notification-horizontal-alignment" type="s">
+      <default>'center'</default>
+      <summary>Notification Horizontal Alignment</summary>
+      <description>'center', 'left', 'right'</description>
+    </key>
+
+    <key name="notification-style" type="s">
+      <default>'theme-grey'</default>
+      <summary>Notification Banner Style</summary>
+      <description>'default', 'theme-grey', 'blur'</description>
+    </key>
+
+    <key name="notification-opacity" type="i">
+      <default>100</default>
+      <summary>Notification Opacity</summary>
+      <description>Opacity percentage 0 to 100</description>
+    </key>
+
+    <key name="notification-close-button-hide" type="b">
+      <default>true</default>
+      <summary>Hide Notification Close Button</summary>
+      <description>Hide X button on notification banners</description>
+    </key>
+
+    <key name="notification-timeout" type="i">
+      <default>4</default>
+      <summary>Notification Timeout</summary>
+      <description>Timeout in seconds before banner hides</description>
+    </key>
+
+    <key name="panel-notification-icon-hide" type="b">
+      <default>false</default>
+      <summary>Hide Panel Notification Icon</summary>
+      <description>Hide dot or bell icon next to clock</description>
+    </key>
+
+
+    <!-- ========================================== -->
+    <!-- 5. ШТОРКА (DATEMENU)                       -->
+    <!-- ========================================== -->
+    <key name="datemenu-calendar-hide" type="b">
+      <default>false</default>
+      <summary>Hide Calendar</summary>
+      <description>Hide calendar widget in date popup</description>
+    </key>
+
+    <key name="datemenu-compact-empty" type="b">
+      <default>false</default>
+      <summary>Compact Empty Notifications</summary>
+      <description>Hide 'No notifications' text, center icon</description>
+    </key>
+
+    <key name="datemenu-weather-hide" type="b">
+      <default>false</default>
+      <summary>Hide Weather Widget</summary>
+      <description>Hide weather block in date popup</description>
+    </key>
+
+    <key name="datemenu-world-clocks-hide" type="b">
+      <default>false</default>
+      <summary>Hide World Clocks</summary>
+      <description>Hide world clocks block in date popup</description>
+    </key>
+
+    <key name="datemenu-events-hide" type="b">
+      <default>false</default>
+      <summary>Hide Events</summary>
+      <description>Hide events column in date popup</description>
+    </key>
+
+    <key name="datemenu-style" type="s">
+      <default>'default'</default>
+      <summary>DateMenu Popover Style</summary>
+      <description>'default', 'theme-grey', 'blur'</description>
+    </key>
+
+    <key name="datemenu-opacity" type="i">
+      <default>100</default>
+      <summary>DateMenu Opacity</summary>
+      <description>Opacity percentage 0 to 100</description>
+    </key>
+
+
+    <!-- ========================================== -->
+    <!-- 6. БЫСТРЫЕ НАСТРОЙКИ (QUICK SETTINGS)       -->
+    <!-- ========================================== -->
+    <key name="quicksettings-full-width-toggle" type="b">
+      <default>false</default>
+      <summary>Expand Last Odd Toggle Full Width</summary>
+      <description>Expand last lonely toggle to span both columns</description>
+    </key>
+
+    <key name="qs-power-hide" type="b">
+      <default>false</default>
+      <summary>Hide Power Button</summary>
+      <description>Hide power button in quick settings</description>
+    </key>
+
+    <key name="qs-screenshot-hide" type="b">
+      <default>false</default>
+      <summary>Hide Screenshot Button</summary>
+      <description>Hide screenshot button in quick settings</description>
+    </key>
+
+    <key name="qs-settings-hide" type="b">
+      <default>false</default>
+      <summary>Hide Settings Button</summary>
+      <description>Hide settings button in quick settings</description>
+    </key>
+
+    <key name="qs-lock-hide" type="b">
+      <default>false</default>
+      <summary>Hide Lock Button</summary>
+      <description>Hide lock button in quick settings</description>
+    </key>
+
+    <key name="quicksettings-style" type="s">
+      <default>'default'</default>
+      <summary>Quick Settings Style</summary>
+      <description>'default', 'theme-grey', 'blur'</description>
+    </key>
+
+    <key name="quicksettings-opacity" type="i">
+      <default>100</default>
+      <summary>Quick Settings Opacity</summary>
+      <description>Opacity percentage 0 to 100</description>
+    </key>
+
+
+    <!-- ========================================== -->
+    <!-- 7. ПРОЧЕЕ (SYSTEM, THEME & BLUR)           -->
+    <!-- ========================================== -->
+    <key name="theme-color" type="s">
+      <default>'#232326'</default>
+      <summary>Theme Base Color</summary>
+      <description>Unified theme background color for all panels</description>
+    </key>
+
+    <key name="blur-sigma" type="i">
+      <default>30</default>
+      <summary>Blur Sigma</summary>
+      <description>Global blur radius / strength (0 to 100)</description>
+    </key>
+
+    <key name="blur-mode" type="s">
+      <default>'static'</default>
+      <summary>Global Blur Mode</summary>
+      <description>'static' or 'dynamic'</description>
+    </key>
+
+    <key name="accent-color" type="s">
+      <default>'blue'</default>
+      <summary>System Accent Color</summary>
+      <description>GNOME accent color</description>
+    </key>
+
+    <key name="dark-mode" type="b">
+      <default>true</default>
+      <summary>Dark Mode</summary>
+      <description>Toggle prefer-dark color scheme</description>
+    </key>
+
+    <key name="lockscreen-prevent-blank" type="b">
+      <default>true</default>
+      <summary>Prevent Screen Blank on Lock</summary>
+      <description>Keep monitors awake and prevent fading to black when locking screen (Win+L)</description>
+    </key>
+
+    <key name="recolor-all-menus-and-dialogs" type="b">
+      <default>true</default>
+      <summary>Recolor Menus and Dialogs</summary>
+      <description>Apply theme color to all popup menus, context menus, and system dialogs</description>
+    </key>
+
+    <key name="menus-dialogs-style" type="s">
+      <default>'theme-grey'</default>
+      <summary>Menus and Dialogs Style</summary>
+      <description>'default', 'theme-grey', 'blur'</description>
+    </key>
+
+
+    <!-- ========================================== -->
+    <!-- 8. СКРИНШОТЫ (SCREENSHOTS)                 -->
+    <!-- ========================================== -->
+    <key name="screenshot-filename-format" type="s">
+      <default>'date'</default>
+      <summary>Screenshot Filename Format</summary>
+      <description>'default', 'date' (YYYY-MM-DD_HH.MM.SS), or 'random' (6 digits)</description>
+    </key>
+
+    <key name="screenshot-clipboard-only" type="b">
+      <default>false</default>
+      <summary>Save Only to Clipboard</summary>
+      <description>Copy screenshot to clipboard without saving file to disk</description>
+    </key>
+
+    <key name="screenshot-sound" type="s">
+      <default>'bubble'</default>
+      <summary>Screenshot Sound Effect</summary>
+      <description>'default', 'disabled', or 'bubble'</description>
+    </key>
+
+    <key name="screenshot-hide-panel" type="b">
+      <default>false</default>
+      <summary>Hide Screenshot Bottom Panel</summary>
+      <description>Hide the bottom controls panel for area/screen/window and record</description>
+    </key>
+
+    <key name="screenshot-quick-capture" type="b">
+      <default>false</default>
+      <summary>Quick Screenshot on Area Selection</summary>
+      <description>Immediately capture upon completing area selection without pressing Enter</description>
+    </key>
+
+    <key name="screenshot-clear-selection" type="b">
+      <default>true</default>
+      <summary>Clear Default Screenshot Selection</summary>
+      <description>Do not show a pre-selected area rectangle when opening screenshot UI</description>
+    </key>
+
+    <key name="screenshot-save-location" type="s">
+      <default>'subfolder'</default>
+      <summary>Screenshot Save Location</summary>
+      <description>'subfolder' (~/Pictures/Screenshots) or 'pictures' directly (~/Pictures)</description>
+    </key>
+
+  </schema>
+</schemalist>
