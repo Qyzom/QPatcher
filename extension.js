@@ -425,7 +425,7 @@ export default class QPatcherExtension extends Extension {
         const updateQuickSettingsButtons = () => {
             try {
                 const qs = Main.panel?.statusArea?.quickSettings;
-                const systemItem = qs?._system?.quickSettingsItems?.[0];
+                const systemItem = qs?._system?.quickSettingsItems?.[0] || qs?._system?._systemItem;
                 const box = systemItem?.child;
                 if (!box || !box.get_children) return;
 
@@ -434,7 +434,19 @@ export default class QPatcherExtension extends Extension {
                 const hideSettings = getBool('qs-settings-hide');
                 const hideLock = getBool('qs-lock-hide');
 
-                for (const child of box.get_children()) {
+                if (systemItem._powerToggle) systemItem._powerToggle.visible = false;
+                if (systemItem._laptopSpacer) systemItem._laptopSpacer.visible = false;
+                if (systemItem._desktopSpacer) systemItem._desktopSpacer.visible = true;
+
+                const children = box.get_children();
+                const settingsIdx = children.findIndex(c =>
+                    c.constructor?.name === 'SettingsItem' ||
+                    c.icon_name === 'emblem-system-symbolic' ||
+                    c.child?.icon_name === 'emblem-system-symbolic'
+                );
+
+                for (let i = 0; i < children.length; i++) {
+                    const child = children[i];
                     const type = child.constructor.name;
                     const isPower = type === 'PowerToggle' ||
                                     child.has_style_class_name?.('power-item') ||
@@ -443,6 +455,7 @@ export default class QPatcherExtension extends Extension {
                     const isScreenshot = type === 'ScreenshotItem' || child.icon_name === 'screenshooter-symbolic';
                     const isSettings = type === 'SettingsItem' || child.icon_name === 'emblem-system-symbolic';
                     const isLock = type === 'LockItem' || child.icon_name === 'changes-prevent-symbolic';
+                    const isSpacer = type === 'Actor' || type === 'ClutterActor' || (!isPower && !isShutdown && !isScreenshot && !isSettings && !isLock && child.x_expand !== undefined);
 
                     if (isPower) {
                         child.visible = false;
@@ -454,6 +467,12 @@ export default class QPatcherExtension extends Extension {
                         child.visible = !hideSettings;
                     } else if (isLock) {
                         child.visible = !hideLock;
+                    } else if (isSpacer) {
+                        // If spacer is before settings item, it's the laptop spacer (must be hidden)
+                        // If spacer is after settings item, it's the desktop spacer (must be visible to push lock/power to the right)
+                        if (settingsIdx !== -1) {
+                            child.visible = (i > settingsIdx);
+                        }
                     }
                 }
             } catch (e) {}
@@ -760,31 +779,42 @@ export default class QPatcherExtension extends Extension {
                 /* ======================================================== */
 
                 /* Quick Settings Toggles */
-                .quick-settings-system-item .power-item:insensitive,
-                .quick-settings-system-item .power-item:not([reactive]) {
-                    background-color: transparent !important;
+                .quick-settings-system-item .power-item,
+                .quick-settings-system-item .quick-toggle.power-item {
+                    display: none !important;
+                    width: 0px !important;
+                    height: 0px !important;
+                    min-width: 0px !important;
+                    min-height: 0px !important;
+                    max-width: 0px !important;
+                    max-height: 0px !important;
+                    margin: 0px !important;
+                    padding: 0px !important;
                     border: none !important;
+                    background-color: transparent !important;
+                    background: transparent !important;
                     box-shadow: none !important;
+                    opacity: 0 !important;
                 }
 
-                .qpatcher-recolor-menus .quick-toggle,
-                .qpatcher-menus-theme .quick-toggle,
-                .qpatcher-qs-theme .quick-toggle,
-                .quick-settings .quick-toggle {
+                .qpatcher-recolor-menus .quick-toggle:not(.power-item),
+                .qpatcher-menus-theme .quick-toggle:not(.power-item),
+                .qpatcher-qs-theme .quick-toggle:not(.power-item),
+                .quick-settings .quick-toggle:not(.power-item) {
                     background-color: ${cardBg} !important;
                 }
 
-                .qpatcher-recolor-menus .quick-toggle:hover,
-                .qpatcher-menus-theme .quick-toggle:hover,
-                .qpatcher-qs-theme .quick-toggle:hover,
-                .quick-settings .quick-toggle:hover {
+                .qpatcher-recolor-menus .quick-toggle:not(.power-item):hover,
+                .qpatcher-menus-theme .quick-toggle:not(.power-item):hover,
+                .qpatcher-qs-theme .quick-toggle:not(.power-item):hover,
+                .quick-settings .quick-toggle:not(.power-item):hover {
                     background-color: ${cardHoverBg} !important;
                 }
 
-                .qpatcher-recolor-menus .quick-toggle:active,
-                .qpatcher-menus-theme .quick-toggle:active,
-                .qpatcher-qs-theme .quick-toggle:active,
-                .quick-settings .quick-toggle:active {
+                .qpatcher-recolor-menus .quick-toggle:not(.power-item):active,
+                .qpatcher-menus-theme .quick-toggle:not(.power-item):active,
+                .qpatcher-qs-theme .quick-toggle:not(.power-item):active,
+                .quick-settings .quick-toggle:not(.power-item):active {
                     background-color: ${cardActiveBg} !important;
                 }
 
