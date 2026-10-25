@@ -103,13 +103,15 @@ app.connect('activate', () => {
         return row;
     };
 
-    const addStyleCombo = (group, title, schemaKey) => {
+    const addStyleCombo = (group, title, schemaKey, allowBlur = false) => {
         const model = new Gtk.StringList();
         model.append(_('По умолчанию (GNOME Default)'));
-        model.append(_('В цвет темы (настраивается в "Прочее")'));
-        model.append(_('Размытие (Blur)'));
+        model.append(_('В цвет темы / Прозрачность'));
+        if (allowBlur) {
+            model.append(_('Размытие (Blur)'));
+        }
 
-        const styles = ['default', 'theme-grey', 'blur'];
+        const styles = allowBlur ? ['default', 'theme-grey', 'blur'] : ['default', 'theme-grey'];
         const current = settings.get_string(schemaKey);
         const row = new Adw.ComboRow({
             title: _(title),
@@ -261,8 +263,18 @@ app.connect('activate', () => {
     });
     pageOverview.add(overviewStyleGroup);
 
-    addStyleCombo(overviewStyleGroup, 'Стиль фона обзора', 'overview-style');
+    addStyleCombo(overviewStyleGroup, 'Стиль фона обзора', 'overview-style', true);
     addOpacitySlider(overviewStyleGroup, 'Прозрачность фона обзора', 'overview-opacity');
+
+    const sigmaRow = new Adw.SpinRow({
+        title: _('Интенсивность размытия (Sigma)'),
+        subtitle: _('Радиус размытия обоев в режиме обзора (от 0 до 100)'),
+        adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 5, page_increment: 10, value: settings.get_int('blur-sigma') }),
+    });
+    sigmaRow.connect('notify::value', () => {
+        settings.set_int('blur-sigma', sigmaRow.value);
+    });
+    overviewStyleGroup.add(sigmaRow);
 
     const overviewElementsGroup = new Adw.PreferencesGroup({
         title: _('Элементы режима обзора и окон'),
@@ -566,35 +578,6 @@ app.connect('activate', () => {
         paletteBox.append(btn);
     });
 
-    const blurGroup = new Adw.PreferencesGroup({
-        title: _('Параметры эффекта размытия (Blur)'),
-        description: _('Интенсивность и режим для всех элементов со стилем "Размытие"'),
-    });
-    pageOther.add(blurGroup);
-
-    const blurModeModel = new Gtk.StringList();
-    blurModeModel.append(_('Статическое (Static, максимальная плавность без лагов)'));
-    blurModeModel.append(_('Динамическое (Dynamic, честное матовое стекло)'));
-    const blurModes = ['static', 'dynamic'];
-    const blurModeRow = new Adw.ComboRow({
-        title: _('Режим размытия'),
-        model: blurModeModel,
-        selected: Math.max(0, blurModes.indexOf(settings.get_string('blur-mode'))),
-    });
-    blurModeRow.connect('notify::selected', () => {
-        settings.set_string('blur-mode', blurModes[blurModeRow.selected]);
-    });
-    blurGroup.add(blurModeRow);
-
-    const sigmaRow = new Adw.SpinRow({
-        title: _('Интенсивность размытия (Sigma)'),
-        subtitle: _('Радиус размытия (от 0 до 100)'),
-        adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 5, page_increment: 10, value: settings.get_int('blur-sigma') }),
-    });
-    sigmaRow.connect('notify::value', () => {
-        settings.set_int('blur-sigma', sigmaRow.value);
-    });
-    blurGroup.add(sigmaRow);
 
     const accentGroup = new Adw.PreferencesGroup({
         title: _('Системный акцентный цвет (GNOME Native)'),

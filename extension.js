@@ -91,40 +91,23 @@ export default class QPatcherExtension extends Extension {
             } catch (e) {}
         });
 
-        // Цвет фона и прозрачность панели (с честным размытием Shell.BlurEffect)
+        // Цвет фона и прозрачность панели
         const updatePanelColor = () => {
             const style = this._settings.get_string('topbar-style');
             const opacity = this._settings.get_int('topbar-opacity') / 100.0;
-            const radius = this._settings.get_int('blur-sigma') || 30;
 
             if (Main.panel) {
                 Main.panel.opacity = Math.round(opacity * 255);
                 Main.panel.set_style(null);
 
                 const hasTheme = Main.panel.has_style_class_name('qpatcher-topbar-theme');
-                const hasBlur = Main.panel.has_style_class_name('qpatcher-topbar-blur');
+                if (Main.panel.remove_effect_by_name) Main.panel.remove_effect_by_name('qpatcher-panel-blur');
+                if (Main.panel.has_style_class_name('qpatcher-topbar-blur')) Main.panel.remove_style_class_name('qpatcher-topbar-blur');
 
-                if (style === 'theme-grey') {
-                    if (hasBlur) Main.panel.remove_style_class_name('qpatcher-topbar-blur');
+                if (style === 'theme-grey' || style === 'blur') {
                     if (!hasTheme) Main.panel.add_style_class_name('qpatcher-topbar-theme');
-                    if (Main.panel.remove_effect_by_name) Main.panel.remove_effect_by_name('qpatcher-panel-blur');
-                } else if (style === 'blur') {
-                    if (hasTheme) Main.panel.remove_style_class_name('qpatcher-topbar-theme');
-                    if (!hasBlur) Main.panel.add_style_class_name('qpatcher-topbar-blur');
-                    if (Main.panel.get_effect && !Main.panel.get_effect('qpatcher-panel-blur')) {
-                        const effect = new Shell.BlurEffect({
-                            name: 'qpatcher-panel-blur',
-                            mode: Shell.BlurMode.BACKGROUND,
-                            radius: radius,
-                        });
-                        Main.panel.add_effect(effect);
-                    } else if (Main.panel.get_effect && Main.panel.get_effect('qpatcher-panel-blur')) {
-                        Main.panel.get_effect('qpatcher-panel-blur').radius = radius;
-                    }
                 } else {
                     if (hasTheme) Main.panel.remove_style_class_name('qpatcher-topbar-theme');
-                    if (hasBlur) Main.panel.remove_style_class_name('qpatcher-topbar-blur');
-                    if (Main.panel.remove_effect_by_name) Main.panel.remove_effect_by_name('qpatcher-panel-blur');
                 }
             }
         };
@@ -143,12 +126,7 @@ export default class QPatcherExtension extends Extension {
             this._syncDashToDockSettings();
         });
         watchKey(this._settings, 'blur-sigma', () => {
-            updatePanelColor();
             this._setupOverviewBlur();
-            this._updateDateMenuStyle();
-            this._updateQuickSettingsStyle();
-            this._updateNotificationStyle();
-            this._syncDashToDockSettings();
         });
 
         // Видимость элементов панели
@@ -776,7 +754,6 @@ export default class QPatcherExtension extends Extension {
             const style = this._settings.get_string('datemenu-style');
             const opacity = this._settings.get_int('datemenu-opacity') / 100.0;
             const color = this._settings.get_string('theme-color') || '#232326';
-            const radius = this._settings.get_int('blur-sigma') || 30;
             const dateMenu = Main.panel?.statusArea?.dateMenu;
             const menuBox = dateMenu?.menu?.box;
             if (!menuBox) return;
@@ -787,19 +764,9 @@ export default class QPatcherExtension extends Extension {
                 menuBox.remove_effect_by_name('qpatcher-datemenu-blur');
             }
 
-            if (style === 'theme-grey') {
+            if (style === 'theme-grey' || style === 'blur') {
                 menuBox.add_style_class_name('qpatcher-datemenu-theme');
                 menuBox.set_style(`background-color: ${this._hexToRgba(color, opacity)} !important;`);
-            } else if (style === 'blur') {
-                menuBox.add_style_class_name('qpatcher-datemenu-blur');
-                menuBox.set_style(`background-color: ${this._hexToRgba(color, Math.min(0.65, opacity))} !important;`);
-                const effect = new Shell.BlurEffect({
-                    brightness: 0.85,
-                    radius: radius,
-                    mode: Shell.BlurMode.BACKGROUND,
-                });
-                effect.name = 'qpatcher-datemenu-blur';
-                menuBox.add_effect(effect);
             } else {
                 menuBox.set_style(null);
             }
@@ -818,7 +785,6 @@ export default class QPatcherExtension extends Extension {
             const style = this._settings.get_string('quicksettings-style');
             const opacity = this._settings.get_int('quicksettings-opacity') / 100.0;
             const color = this._settings.get_string('theme-color') || '#232326';
-            const radius = this._settings.get_int('blur-sigma') || 30;
             const qs = Main.panel?.statusArea?.quickSettings;
             const menuBox = qs?.menu?.box;
             if (!menuBox) return;
@@ -829,19 +795,9 @@ export default class QPatcherExtension extends Extension {
                 menuBox.remove_effect_by_name('qpatcher-qs-blur');
             }
 
-            if (style === 'theme-grey') {
+            if (style === 'theme-grey' || style === 'blur') {
                 menuBox.add_style_class_name('qpatcher-qs-theme');
                 menuBox.set_style(`background-color: ${this._hexToRgba(color, opacity)} !important;`);
-            } else if (style === 'blur') {
-                menuBox.add_style_class_name('qpatcher-qs-blur');
-                menuBox.set_style(`background-color: ${this._hexToRgba(color, Math.min(0.65, opacity))} !important;`);
-                const effect = new Shell.BlurEffect({
-                    brightness: 0.85,
-                    radius: radius,
-                    mode: Shell.BlurMode.BACKGROUND,
-                });
-                effect.name = 'qpatcher-qs-blur';
-                menuBox.add_effect(effect);
             } else {
                 menuBox.set_style(null);
             }
@@ -860,7 +816,6 @@ export default class QPatcherExtension extends Extension {
             const style = this._settings.get_string('notification-style');
             const opacity = this._settings.get_int('notification-opacity') / 100.0;
             const themeColor = this._settings.get_string('theme-color') || '#232326';
-            const radius = this._settings.get_int('blur-sigma') || 30;
 
             if (Main.messageTray && !this._messageTrayHooked) {
                 this._messageTrayHooked = true;
@@ -891,19 +846,9 @@ export default class QPatcherExtension extends Extension {
                 banner.remove_style_class_name('qpatcher-notification-blur');
                 if (banner.remove_effect_by_name) banner.remove_effect_by_name('qpatcher-banner-blur');
 
-                if (style === 'theme-grey') {
+                if (style === 'theme-grey' || style === 'blur') {
                     banner.add_style_class_name('qpatcher-notification-theme');
                     banner.set_style(`background-color: ${this._hexToRgba(themeColor, opacity)} !important;`);
-                } else if (style === 'blur') {
-                    banner.add_style_class_name('qpatcher-notification-blur');
-                    banner.set_style(`background-color: ${this._hexToRgba(themeColor, Math.min(0.5, opacity))} !important;`);
-                    const effect = new Shell.BlurEffect({
-                        brightness: 0.85,
-                        radius: radius,
-                        mode: Shell.BlurMode.BACKGROUND,
-                    });
-                    effect.name = 'qpatcher-banner-blur';
-                    banner.add_effect(effect);
                 } else {
                     banner.set_style(null);
                 }
@@ -982,16 +927,11 @@ export default class QPatcherExtension extends Extension {
                 d2d.set_boolean('custom-theme-customize-running-dots', false);
             }
 
-            if (style === 'theme-grey') {
+            if (style === 'theme-grey' || style === 'blur') {
                 d2d.set_boolean('apply-custom-theme', false);
                 d2d.set_boolean('custom-background-color', true);
                 d2d.set_string('background-color', themeColor);
                 d2d.set_double('background-opacity', opacity);
-            } else if (style === 'blur') {
-                d2d.set_boolean('apply-custom-theme', false);
-                d2d.set_boolean('custom-background-color', true);
-                d2d.set_string('background-color', themeColor);
-                d2d.set_double('background-opacity', Math.min(0.40, opacity));
             } else {
                 d2d.set_boolean('apply-custom-theme', true);
                 d2d.set_boolean('custom-background-color', false);

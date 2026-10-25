@@ -14,7 +14,7 @@
     <key name="topbar-style" type="s">
       <default>'default'</default>
       <summary>Topbar Style</summary>
-      <description>'default', 'theme-grey', 'blur'</description>
+      <description>'default', 'theme-grey'</description>
     </key>
 
     <key name="topbar-opacity" type="i">
@@ -154,9 +154,9 @@
     </key>
 
     <key name="dock-style" type="s">
-      <default>'blur'</default>
+      <default>'theme-grey'</default>
       <summary>Dock Style</summary>
-      <description>'default', 'theme-grey', 'blur'</description>
+      <description>'default', 'theme-grey'</description>
     </key>
 
     <key name="dock-opacity" type="i">
@@ -230,7 +230,7 @@
     <key name="notification-style" type="s">
       <default>'theme-grey'</default>
       <summary>Notification Banner Style</summary>
-      <description>'default', 'theme-grey', 'blur'</description>
+      <description>'default', 'theme-grey'</description>
     </key>
 
     <key name="notification-opacity" type="i">
@@ -294,7 +294,7 @@
     <key name="datemenu-style" type="s">
       <default>'default'</default>
       <summary>DateMenu Popover Style</summary>
-      <description>'default', 'theme-grey', 'blur'</description>
+      <description>'default', 'theme-grey'</description>
     </key>
 
     <key name="datemenu-opacity" type="i">
@@ -340,7 +340,7 @@
     <key name="quicksettings-style" type="s">
       <default>'default'</default>
       <summary>Quick Settings Style</summary>
-      <description>'default', 'theme-grey', 'blur'</description>
+      <description>'default', 'theme-grey'</description>
     </key>
 
     <key name="quicksettings-opacity" type="i">
@@ -361,8 +361,8 @@
 
     <key name="blur-sigma" type="i">
       <default>30</default>
-      <summary>Blur Sigma</summary>
-      <description>Global blur radius / strength (0 to 100)</description>
+      <summary>Overview Blur Sigma</summary>
+      <description>Overview blur radius / strength (0 to 100)</description>
     </key>
 
     <key name="blur-mode" type="s">
@@ -398,7 +398,7 @@
     <key name="menus-dialogs-style" type="s">
       <default>'theme-grey'</default>
       <summary>Menus and Dialogs Style</summary>
-      <description>'default', 'theme-grey', 'blur'</description>
+      <description>'default', 'theme-grey'</description>
     </key>
 
 

@@ -1522,13 +1522,11 @@
 .icon-grid .notification-badge {
   color: white;
   background-color: #e01b24;
-  padding: 0px;
-  border-radius: 9999px;
-  font-weight: 800;
+  padding: 0.2em 0.5em;
+  border-radius: 1em;
+  font-weight: bold;
   text-align: center;
-  margin: 0px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
-  border: 1.5px solid rgba(255, 255, 255, 0.4); }
+  margin: 2px; }
 
 #dashtodockPreviewSeparator.popup-separator-menu-item-horizontal {
   width: 1px;
