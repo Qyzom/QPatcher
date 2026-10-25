@@ -436,14 +436,25 @@ export default class QPatcherExtension extends Extension {
 
                 for (const child of box.get_children()) {
                     const type = child.constructor.name;
-                    if (type === 'PowerToggle') {
-                        if (!child.reactive || child.has_style_pseudo_class?.('insensitive')) {
-                            child.visible = false;
-                        }
-                    } else if (type === 'ShutdownItem') child.visible = !hidePower;
-                    else if (type === 'ScreenshotItem') child.visible = !hideScreenshot;
-                    else if (type === 'SettingsItem') child.visible = !hideSettings;
-                    else if (type === 'LockItem') child.visible = !hideLock;
+                    const isPower = type === 'PowerToggle' ||
+                                    child.has_style_class_name?.('power-item') ||
+                                    child._proxy !== undefined;
+                    const isShutdown = type === 'ShutdownItem' || child.icon_name === 'system-shutdown-symbolic';
+                    const isScreenshot = type === 'ScreenshotItem' || child.icon_name === 'screenshooter-symbolic';
+                    const isSettings = type === 'SettingsItem' || child.icon_name === 'emblem-system-symbolic';
+                    const isLock = type === 'LockItem' || child.icon_name === 'changes-prevent-symbolic';
+
+                    if (isPower) {
+                        child.visible = false;
+                    } else if (isShutdown) {
+                        child.visible = !hidePower;
+                    } else if (isScreenshot) {
+                        child.visible = !hideScreenshot;
+                    } else if (isSettings) {
+                        child.visible = !hideSettings;
+                    } else if (isLock) {
+                        child.visible = !hideLock;
+                    }
                 }
             } catch (e) {}
         };
@@ -558,6 +569,7 @@ export default class QPatcherExtension extends Extension {
         this._syncDashToDockSettings();
         this._updateDateMenuStyle();
         this._updateQuickSettingsStyle();
+        updateQuickSettingsButtons();
         this._updateNotificationStyle();
         this._updateNotificationPosition();
         this._applyQuickSettingsFullWidth();
@@ -1361,15 +1373,6 @@ export default class QPatcherExtension extends Extension {
             const toggles = [];
             for (const child of grid) {
                 if (!child.visible) continue;
-                if (child.has_style_class_name?.('background-apps-quick-toggle') ||
-                    child.constructor?.name === 'BackgroundAppsToggle') {
-                    if (layout.child_set_property) {
-                        try { layout.child_set_property(grid, child, 'column-span', 2); } catch (e) {}
-                    }
-                    const meta = layout.get_child_meta ? layout.get_child_meta(grid, child) : null;
-                    if (meta) { meta.columnSpan = 2; meta.column_span = 2; }
-                    continue;
-                }
                 const isToggle = child.has_style_class_name?.('quick-toggle') ||
                                  child.has_style_class_name?.('quick-toggle-has-menu') ||
                                  child.constructor?.name?.endsWith('Toggle');
