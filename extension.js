@@ -532,6 +532,12 @@ export default class QPatcherExtension extends Extension {
         this._applyQuickSettingsFullWidth();
         this._updateDynamicThemeStylesheet();
 
+        // Инициализация видимости строки поиска в обзоре
+        const hideSearch = this._settings.get_boolean('overview-search-hide');
+        toggleClass('qpatcher-no-overview-search', hideSearch);
+        const searchEntry = Main.overview?._overview?._controls?._searchEntry;
+        if (searchEntry) searchEntry.visible = !hideSearch;
+
         // Устанавливаем надежные хуки на прототипы и индикаторы
         this._setupKeyboardManagerHook();
         this._setupClassPrototypePatches();
@@ -897,10 +903,94 @@ export default class QPatcherExtension extends Extension {
 
     _setupOverviewBlur() {
         this._destroyOverviewBlur();
+        const style = this._settings.get_string('overview-style');
+        const opacity = this._settings.get_int('overview-opacity') / 100.0;
         const uiGroup = this._getUiGroup();
-        if (uiGroup) {
+        if (!uiGroup) return;
+
+        if (style !== 'blur') {
             uiGroup.remove_style_class_name('qpatcher-overview-blur-active');
+            return;
         }
+
+        uiGroup.add_style_class_name('qpatcher-overview-blur-active');
+        try {
+            if (!Main.layoutManager?.overviewGroup) return;
+            this._overviewBackgroundGroup = new Meta.BackgroundGroup({
+                name: 'qpatcher-overview-background-group',
+                reactive: false,
+            });
+            this._overviewBackgroundGroup.add_constraint(new Clutter.BindConstraint({
+                source: Main.layoutManager.overviewGroup,
+                coordinate: Clutter.BindCoordinate.ALL,
+            }));
+            this._overviewBackgroundGroup.opacity = Math.round(opacity * 255);
+            this._overviewBackgroundManagers = [];
+
+            const radius = this._settings.get_int('blur-sigma') || 30;
+            const monitors = Main.layoutManager.monitors || [];
+            for (let i = 0; i < monitors.length; i++) {
+                const mon = monitors[i];
+                const monActor = new St.Widget({
+                    name: `qpatcher-overview-monitor-${i}`,
+                    x: mon.x,
+                    y: mon.y,
+                    width: mon.width,
+                    height: mon.height,
+                    reactive: false,
+                });
+
+                const source = new St.Widget({
+                    name: `qpatcher-overview-source-${i}`,
+                    visible: false,
+                    reactive: false,
+                });
+                source.add_constraint(new Clutter.BindConstraint({
+                    source: monActor,
+                    coordinate: Clutter.BindCoordinate.SIZE,
+                }));
+                monActor.add_child(source);
+
+                const clone = new Clutter.Clone({
+                    source: source,
+                    reactive: false,
+                });
+                clone.add_constraint(new Clutter.BindConstraint({
+                    source: monActor,
+                    coordinate: Clutter.BindCoordinate.SIZE,
+                }));
+                monActor.add_child(clone);
+
+                const bgManager = new Background.BackgroundManager({
+                    container: source,
+                    monitorIndex: i,
+                    controlPosition: false,
+                });
+                const effect = new Shell.BlurEffect({
+                    brightness: 0.85,
+                    radius: radius,
+                    mode: Shell.BlurMode.ACTOR,
+                });
+                effect.name = `qpatcher-overview-blur-${i}`;
+                clone.add_effect(effect);
+
+                this._overviewBackgroundGroup.add_child(monActor);
+                this._overviewBackgroundManagers.push(bgManager);
+            }
+
+            Main.layoutManager.overviewGroup.insert_child_at_index(this._overviewBackgroundGroup, 0);
+            this._reorderingOverview = false;
+            this._overviewChildAddedId = Main.layoutManager.overviewGroup.connect('child-added', (_, child) => {
+                if (this._reorderingOverview) return;
+                if (child !== this._overviewBackgroundGroup && this._overviewBackgroundGroup) {
+                    this._reorderingOverview = true;
+                    try {
+                        Main.layoutManager.overviewGroup.set_child_at_index(this._overviewBackgroundGroup, 0);
+                    } catch (e) {}
+                    this._reorderingOverview = false;
+                }
+            });
+        } catch (e) {}
     }
 
     _destroyOverviewBlur() {
