@@ -229,9 +229,13 @@
 
 .qpatcher-no-overview-search .search-entry,
 .qpatcher-no-overview-search .search-entry-bin {
-    display: none !important;
     opacity: 0 !important;
     height: 0 !important;
+    min-height: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
 }
 
 .qpatcher-no-overview-thumbnails .workspace-thumbnails {
@@ -407,7 +411,23 @@
 
 .qpatcher-recolor-menus .popup-sub-menu .popup-menu-item,
 .qpatcher-menus-theme .popup-sub-menu .popup-menu-item {
-    background-color: transparent !important;
+    background-color: transparent;
+}
+
+.qpatcher-recolor-menus .popup-menu-item:hover,
+.qpatcher-recolor-menus .popup-menu-item:selected,
+.qpatcher-recolor-menus .popup-menu-item:focus,
+.qpatcher-menus-theme .popup-menu-item:hover,
+.qpatcher-menus-theme .popup-menu-item:selected,
+.qpatcher-menus-theme .popup-menu-item:focus {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
+}
+
+.qpatcher-recolor-menus .popup-menu-item:active,
+.qpatcher-menus-theme .popup-menu-item:active {
+    background-color: rgba(255, 255, 255, 0.20) !important;
+    color: #ffffff !important;
 }
 
 .qpatcher-recolor-menus .modal-dialog,

@@ -317,10 +317,7 @@ export default class QPatcherExtension extends Extension {
         });
 
         watchKey(this._settings, 'overview-search-hide', () => {
-            const hide = getBool('overview-search-hide');
-            toggleClass('qpatcher-no-overview-search', hide);
-            const searchEntry = Main.overview?._overview?._controls?._searchEntry;
-            if (searchEntry) searchEntry.visible = !hide;
+            this._updateOverviewSearchVisibility();
         });
 
         watchKey(this._settings, 'overview-workspace-switcher-hide', () => {
@@ -557,10 +554,8 @@ export default class QPatcherExtension extends Extension {
         this._updateDynamicThemeStylesheet();
 
         // Инициализация видимости строки поиска в обзоре
-        const hideSearch = getBool('overview-search-hide');
-        toggleClass('qpatcher-no-overview-search', hideSearch);
-        const searchEntry = Main.overview?._overview?._controls?._searchEntry;
-        if (searchEntry) searchEntry.visible = !hideSearch;
+        this._setupOverviewSearchHooks();
+        this._updateOverviewSearchVisibility();
 
         // Устанавливаем надежные хуки на прототипы и индикаторы
         this._setupKeyboardManagerHook();
@@ -627,13 +622,13 @@ export default class QPatcherExtension extends Extension {
             if (customCardColor && customCardColor.startsWith('#') && (customCardColor.length === 4 || customCardColor.length === 7)) {
                 const cardRgb = this._parseHex(customCardColor);
                 cardBg = customCardColor;
-                cardHoverBg = this._mixColors(cardRgb, white, 0.08);
-                cardActiveBg = this._mixColors(cardRgb, white, 0.16);
+                cardHoverBg = this._mixColors(cardRgb, white, 0.12);
+                cardActiveBg = this._mixColors(cardRgb, white, 0.20);
                 sliderTroughBg = this._mixColors(cardRgb, black, 0.25);
             } else {
                 cardBg = this._mixColors(baseRgb, white, 0.09);
-                cardHoverBg = this._mixColors(baseRgb, white, 0.16);
-                cardActiveBg = this._mixColors(baseRgb, white, 0.24);
+                cardHoverBg = this._mixColors(baseRgb, white, 0.18);
+                cardActiveBg = this._mixColors(baseRgb, white, 0.26);
                 sliderTroughBg = this._mixColors(baseRgb, black, 0.25);
             }
 
@@ -700,6 +695,42 @@ export default class QPatcherExtension extends Extension {
                 .qpatcher-recolor-menus .quick-toggle-menu {
                     background-color: ${themeColor} !important;
                     border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                }
+
+                /* Popup Menu Items Hover, Selected and Active */
+                .popup-menu-item,
+                .popup-sub-menu .popup-menu-item,
+                .quick-toggle-menu .popup-menu-item,
+                .candidate-popup-content .popup-menu-item {
+                    transition-duration: 120ms !important;
+                }
+
+                .qpatcher-recolor-menus .popup-menu-item:hover,
+                .qpatcher-recolor-menus .popup-menu-item:selected,
+                .qpatcher-recolor-menus .popup-menu-item:focus,
+                .qpatcher-menus-theme .popup-menu-item:hover,
+                .qpatcher-menus-theme .popup-menu-item:selected,
+                .qpatcher-menus-theme .popup-menu-item:focus,
+                .popup-menu-content .popup-menu-item:hover,
+                .popup-menu-content .popup-menu-item:selected,
+                .popup-menu-content .popup-menu-item:focus,
+                .popup-sub-menu .popup-menu-item:hover,
+                .popup-sub-menu .popup-menu-item:selected,
+                .popup-sub-menu .popup-menu-item:focus,
+                .quick-toggle-menu .popup-menu-item:hover,
+                .quick-toggle-menu .popup-menu-item:selected,
+                .quick-toggle-menu .popup-menu-item:focus {
+                    background-color: ${cardHoverBg} !important;
+                    color: #ffffff !important;
+                }
+
+                .qpatcher-recolor-menus .popup-menu-item:active,
+                .qpatcher-menus-theme .popup-menu-item:active,
+                .popup-menu-content .popup-menu-item:active,
+                .popup-sub-menu .popup-menu-item:active,
+                .quick-toggle-menu .popup-menu-item:active {
+                    background-color: ${cardActiveBg} !important;
+                    color: #ffffff !important;
                 }
 
                 /* ======================================================== */
@@ -907,6 +938,76 @@ export default class QPatcherExtension extends Extension {
                 } catch (e) {}
             }
         } catch (e) {}
+    }
+
+    _updateOverviewSearchVisibility() {
+        try {
+            const hideSetting = this._getSettingBool('overview-search-hide');
+            const controls = Main.overview?._overview?._controls;
+            const searchController = controls?._searchController;
+            const searchEntry = controls?._searchEntry || Main.overview?.searchEntry;
+            const searchEntryBin = controls?._searchEntryBin;
+
+            const text = searchEntry?.clutter_text?.text || '';
+            const isSearching = (searchController && searchController.searchActive) || text.length > 0;
+
+            const uiGroup = this._getUiGroup();
+            if (uiGroup) {
+                if (hideSetting && !isSearching) {
+                    uiGroup.add_style_class_name('qpatcher-no-overview-search');
+                } else {
+                    uiGroup.remove_style_class_name('qpatcher-no-overview-search');
+                }
+            }
+
+            if (searchEntry) {
+                searchEntry.visible = true;
+            }
+            if (searchEntryBin) {
+                searchEntryBin.visible = true;
+            }
+        } catch (e) {
+            console.warn('[QPatcher] Error updating overview search visibility:', e);
+        }
+    }
+
+    _setupOverviewSearchHooks() {
+        try {
+            const controls = Main.overview?._overview?._controls;
+            const searchController = controls?._searchController;
+            const searchEntry = controls?._searchEntry || Main.overview?.searchEntry;
+
+            if (searchController && !searchController._qpatcherSearchActiveHooked) {
+                searchController._qpatcherSearchActiveHooked = true;
+                const id = searchController.connect('notify::search-active', () => {
+                    this._updateOverviewSearchVisibility();
+                });
+                this._signals.push({ obj: searchController, id });
+            }
+
+            if (searchEntry?.clutter_text && !searchEntry.clutter_text._qpatcherTextHooked) {
+                searchEntry.clutter_text._qpatcherTextHooked = true;
+                const id = searchEntry.clutter_text.connect('text-changed', () => {
+                    this._updateOverviewSearchVisibility();
+                });
+                this._signals.push({ obj: searchEntry.clutter_text, id });
+            }
+
+            if (Main.overview && !Main.overview._qpatcherSearchOverviewHooked) {
+                Main.overview._qpatcherSearchOverviewHooked = true;
+                const id1 = Main.overview.connect('showing', () => {
+                    this._setupOverviewSearchHooks();
+                    this._updateOverviewSearchVisibility();
+                });
+                const id2 = Main.overview.connect('hidden', () => {
+                    this._updateOverviewSearchVisibility();
+                });
+                this._signals.push({ obj: Main.overview, id: id1 });
+                this._signals.push({ obj: Main.overview, id: id2 });
+            }
+        } catch (e) {
+            console.warn('[QPatcher] Error setting up overview search hooks:', e);
+        }
     }
 
     _setupOverviewBlur() {
@@ -1671,6 +1772,13 @@ export default class QPatcherExtension extends Extension {
         this._restoreScreenShieldPatch();
         this._destroyOverviewBlur();
 
+        const controls = Main.overview?._overview?._controls;
+        if (controls?._searchEntry) controls._searchEntry.visible = true;
+        if (controls?._searchEntryBin) controls._searchEntryBin.visible = true;
+        if (controls?._searchController) controls._searchController._qpatcherSearchActiveHooked = false;
+        if (controls?._searchEntry?.clutter_text) controls._searchEntry.clutter_text._qpatcherTextHooked = false;
+        if (Main.overview) Main.overview._qpatcherSearchOverviewHooked = false;
+
         const uiGroup = this._getUiGroup();
         const classesToRemove = [
             'qpatcher-hide-panel-notification-icon',
@@ -1719,8 +1827,6 @@ export default class QPatcherExtension extends Extension {
                 Main.panel.statusArea.quickSettings.container.visible = true;
             }
         }
-
-        this._destroyOverviewBlur();
 
         const dateMenu = Main.panel?.statusArea?.dateMenu;
         if (dateMenu) {
