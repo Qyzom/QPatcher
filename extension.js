@@ -435,8 +435,14 @@ export default class QPatcherExtension extends Extension {
                 const hideLock = getBool('qs-lock-hide');
 
                 if (systemItem._powerToggle) systemItem._powerToggle.visible = false;
-                if (systemItem._laptopSpacer) systemItem._laptopSpacer.visible = false;
-                if (systemItem._desktopSpacer) systemItem._desktopSpacer.visible = true;
+                if (systemItem._laptopSpacer) {
+                    systemItem._laptopSpacer.visible = false;
+                    systemItem._laptopSpacer.x_expand = false;
+                }
+                if (systemItem._desktopSpacer) {
+                    systemItem._desktopSpacer.visible = true;
+                    systemItem._desktopSpacer.x_expand = true;
+                }
 
                 const children = box.get_children();
                 const settingsIdx = children.findIndex(c =>
@@ -468,22 +474,22 @@ export default class QPatcherExtension extends Extension {
                     } else if (isLock) {
                         child.visible = !hideLock;
                     } else if (isSpacer) {
-                        // If spacer is before settings item, it's the laptop spacer (must be hidden)
-                        // If spacer is after settings item, it's the desktop spacer (must be visible to push lock/power to the right)
                         if (settingsIdx !== -1) {
                             child.visible = (i > settingsIdx);
+                            child.x_expand = (i > settingsIdx);
                         }
                     }
                 }
+                box.queue_relayout?.();
             } catch (e) {}
         };
 
         const qs = Main.panel?.statusArea?.quickSettings;
-        if (qs?.menu && !qs.menu._qpatcherButtonsHooked) {
-            qs.menu._qpatcherButtonsHooked = true;
-            qs.menu.connect('open-state-changed', (menu, isOpen) => {
+        if (qs?.menu) {
+            const qsOpenId = qs.menu.connect('open-state-changed', (menu, isOpen) => {
                 if (isOpen) updateQuickSettingsButtons();
             });
+            this._signals.push({ obj: qs.menu, id: qsOpenId });
         }
 
         watchKey(this._settings, 'qs-power-hide', updateQuickSettingsButtons);
@@ -1905,11 +1911,14 @@ export default class QPatcherExtension extends Extension {
 
         const qs = Main.panel?.statusArea?.quickSettings;
         if (qs) {
-            const systemItem = qs._system?.quickSettingsItems?.[0];
+            const systemItem = qs._system?.quickSettingsItems?.[0] || qs._system?._systemItem;
             const box = systemItem?.child;
             if (box?.get_children) {
                 for (const child of box.get_children()) {
-                    child.visible = true;
+                    const type = child.constructor.name;
+                    if (type === 'ScreenshotItem' || type === 'SettingsItem' || type === 'LockItem' || type === 'ShutdownItem') {
+                        child.visible = true;
+                    }
                 }
             }
             if (qs.menu?.box) {
