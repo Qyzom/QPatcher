@@ -912,11 +912,8 @@ export default class QPatcherExtension extends Extension {
             if (!Main.layoutManager?.overviewGroup) return;
             this._overviewBackgroundGroup = new Meta.BackgroundGroup({
                 name: 'qpatcher-overview-background-group',
+                reactive: false,
             });
-            this._overviewBackgroundGroup.add_constraint(new Clutter.BindConstraint({
-                source: Main.layoutManager.overviewGroup,
-                coordinate: Clutter.BindCoordinate.ALL,
-            }));
             this._overviewBackgroundGroup.opacity = Math.round(opacity * 255);
             this._overviewBackgroundManagers = [];
 
@@ -930,11 +927,13 @@ export default class QPatcherExtension extends Extension {
                     y: mon.y,
                     width: mon.width,
                     height: mon.height,
+                    reactive: false,
                 });
 
                 const source = new St.Widget({
                     name: `qpatcher-overview-source-${i}`,
                     visible: false,
+                    reactive: false,
                 });
                 source.add_constraint(new Clutter.BindConstraint({
                     source: monActor,
@@ -944,6 +943,7 @@ export default class QPatcherExtension extends Extension {
 
                 const clone = new Clutter.Clone({
                     source: source,
+                    reactive: false,
                 });
                 clone.add_constraint(new Clutter.BindConstraint({
                     source: monActor,
@@ -969,9 +969,15 @@ export default class QPatcherExtension extends Extension {
             }
 
             Main.layoutManager.overviewGroup.insert_child_at_index(this._overviewBackgroundGroup, 0);
+            this._reorderingOverview = false;
             this._overviewChildAddedId = Main.layoutManager.overviewGroup.connect('child-added', (_, child) => {
+                if (this._reorderingOverview) return;
                 if (child !== this._overviewBackgroundGroup && this._overviewBackgroundGroup) {
-                    Main.layoutManager.overviewGroup.set_child_at_index(this._overviewBackgroundGroup, 0);
+                    this._reorderingOverview = true;
+                    try {
+                        Main.layoutManager.overviewGroup.set_child_at_index(this._overviewBackgroundGroup, 0);
+                    } catch (e) {}
+                    this._reorderingOverview = false;
                 }
             });
         } catch (e) {}
@@ -983,6 +989,7 @@ export default class QPatcherExtension extends Extension {
                 Main.layoutManager.overviewGroup.disconnect(this._overviewChildAddedId);
                 this._overviewChildAddedId = 0;
             }
+            this._reorderingOverview = false;
             if (this._overviewBackgroundManagers) {
                 this._overviewBackgroundManagers.forEach(mgr => {
                     if (mgr?.destroy) mgr.destroy();
@@ -2035,10 +2042,10 @@ export default class QPatcherExtension extends Extension {
                 if (this._settings?.get_boolean('screenshot-clear-selection')) {
                     const areaSelector = Main.screenshotUI._areaSelector;
                     if (areaSelector) {
-                        areaSelector._startX = -1;
-                        areaSelector._startY = -1;
-                        areaSelector._lastX = -1;
-                        areaSelector._lastY = -1;
+                        areaSelector._startX = 0;
+                        areaSelector._startY = 0;
+                        areaSelector._lastX = 0;
+                        areaSelector._lastY = 0;
                         areaSelector._areaIndicator?.setSelectionRect(0, 0, 0, 0);
                         if (areaSelector._topLeftHandle) areaSelector._topLeftHandle.visible = false;
                         if (areaSelector._topRightHandle) areaSelector._topRightHandle.visible = false;
@@ -2052,7 +2059,50 @@ export default class QPatcherExtension extends Extension {
 
     async _captureScreenshotCustom(texture, geometry, scale, cursor) {
         const stream = Gio.MemoryOutputStream.new_resizable();
-        const [x, y, w, h] = geometry ?? [0, 0, -1, -1];
+        const texWidth = texture.get_width();
+        const texHeight = texture.get_height();
+
+        let x = 0;
+        let y = 0;
+        let w = -1;
+        let h = -1;
+
+        if (geometry && Array.isArray(geometry)) {
+            let [gx, gy, gw, gh] = geometry;
+
+            // Если область не была явно выделена (0x0 или 1x1 при сбросе) или невалидна
+            if ((gw <= 2 && gh <= 2) || gw <= 0 || gh <= 0) {
+                // Полноэкранный захват
+                x = 0;
+                y = 0;
+                w = -1;
+                h = -1;
+            } else {
+                gx = Math.round(gx);
+                gy = Math.round(gy);
+                gw = Math.round(gw);
+                gh = Math.round(gh);
+
+                // Ограничиваем начальные координаты в пределах текстуры
+                x = Math.max(0, Math.min(gx, texWidth - 1));
+                y = Math.max(0, Math.min(gy, texHeight - 1));
+
+                // Если начальная точка была за левым/верхним краем, компенсируем ширину/высоту
+                if (gx < 0) gw += gx;
+                if (gy < 0) gh += gy;
+
+                // Строго ограничиваем ширину и высоту, чтобы x + w <= texWidth и y + h <= texHeight
+                w = Math.max(1, Math.min(gw, texWidth - x));
+                h = Math.max(1, Math.min(gh, texHeight - y));
+
+                // Если выделение покрывает всю текстуру, используем -1, -1 для нативного быстрого рендера
+                if (x === 0 && y === 0 && w === texWidth && h === texHeight) {
+                    w = -1;
+                    h = -1;
+                }
+            }
+        }
+
         if (cursor === null) {
             cursor = { texture: null, x: 0, y: 0, scale: 1 };
         }
