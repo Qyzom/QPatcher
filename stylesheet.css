@@ -103,12 +103,6 @@
     padding: 0 4px !important;
 }
 
-#dashtodockContainer.qpatcher-dock-blurred #dash .dash-background {
-    background-color: rgba(35, 35, 38, 0.40) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
-}
-
 /* Подсветка бейджа уведомлений акцентным цветом */
 .qpatcher-badge-accent .notification-badge,
 .qpatcher-badge-accent #dashtodockContainer .notification-badge,

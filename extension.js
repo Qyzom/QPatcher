@@ -131,12 +131,10 @@ export default class QPatcherExtension extends Extension {
 
         watchKey(this._settings, 'topbar-style', () => {
             updatePanelColor();
-            this._setupTopbarBlur();
             this._updateDynamicThemeStylesheet();
         });
         watchKey(this._settings, 'topbar-opacity', () => {
             updatePanelColor();
-            this._setupTopbarBlur();
             this._updateDynamicThemeStylesheet();
         });
         watchKey(this._settings, 'theme-color', () => {
@@ -146,7 +144,6 @@ export default class QPatcherExtension extends Extension {
         });
         watchKey(this._settings, 'blur-sigma', () => {
             updatePanelColor();
-            this._setupTopbarBlur();
             this._setupOverviewBlur();
             this._updateDateMenuStyle();
             this._updateQuickSettingsStyle();
@@ -530,7 +527,6 @@ export default class QPatcherExtension extends Extension {
 
         // Первичная инициализация всех стилей и эффектов
         updatePanelColor();
-        this._setupTopbarBlur();
         this._updatePanelMonitor();
         this._syncDashToDockSettings();
         this._setupOverviewBlur();
@@ -618,12 +614,6 @@ export default class QPatcherExtension extends Extension {
                 #panel.qpatcher-topbar-blur,
                 #panelBox #panel.qpatcher-topbar-blur {
                     background-color: ${this._hexToRgba(themeColor, Math.min(0.45, topbarOpacity))} !important;
-                }
-
-                #dashtodockContainer.qpatcher-dock-blurred #dash .dash-background {
-                    background-color: ${this._hexToRgba(themeColor, 0.40)} !important;
-                    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
                 }
 
                 .notification-banner,
@@ -778,123 +768,6 @@ export default class QPatcherExtension extends Extension {
                 this._overviewBackgroundGroup.destroy();
                 this._overviewBackgroundGroup = null;
             }
-        } catch (e) {}
-    }
-
-    _setupTopbarBlur() {
-        this._destroyTopbarBlur();
-        const style = this._settings?.get_string('topbar-style') || 'theme-grey';
-        if (style !== 'blur') return;
-
-        try {
-            const panelBox = Main.layoutManager?.panelBox;
-            if (!panelBox || !Main.panel) return;
-
-            const mon = Main.layoutManager.primaryMonitor;
-            if (!mon) return;
-
-            this._topbarBlurGroup = new Meta.BackgroundGroup({
-                name: 'qpatcher-topbar-blur-group',
-            });
-
-            const source = new St.Widget({
-                name: 'qpatcher-topbar-blur-source',
-                visible: false,
-                width: mon.width,
-                height: mon.height,
-            });
-            this._topbarBlurGroup.add_child(source);
-
-            this._topbarBlurClone = new Clutter.Clone({
-                source: source,
-                width: mon.width,
-                height: mon.height,
-            });
-            this._topbarBlurGroup.add_child(this._topbarBlurClone);
-
-            this._topbarBlurBgManager = new Background.BackgroundManager({
-                container: source,
-                monitorIndex: mon.index,
-                controlPosition: false,
-            });
-
-            const blurRadius = this._settings?.get_int('blur-sigma') || 30;
-            const effect = new Shell.BlurEffect({
-                brightness: 0.85,
-                radius: blurRadius,
-                mode: Shell.BlurMode.ACTOR,
-            });
-            this._topbarBlurClone.add_effect(effect);
-
-            panelBox.insert_child_at_index(this._topbarBlurGroup, 0);
-
-            const updateTopbarGeometry = () => {
-                if (!this._topbarBlurGroup || !Main.panel || !this._topbarBlurClone) return;
-                try {
-                    if (Main.overview?.visible) {
-                        this._topbarBlurGroup.visible = false;
-                        return;
-                    }
-                    this._topbarBlurGroup.visible = Main.panel.visible && panelBox.visible;
-
-                    const [panelStageX, panelStageY] = Main.panel.get_transformed_position();
-                    const [panelW, panelH] = Main.panel.get_transformed_size();
-                    if (panelW <= 0 || panelH <= 0) return;
-
-                    const [boxStageX, boxStageY] = panelBox.get_transformed_position();
-
-                    this._topbarBlurClone.x = mon.x - boxStageX;
-                    this._topbarBlurClone.y = mon.y - boxStageY;
-
-                    const clipX = panelStageX - mon.x;
-                    const clipY = panelStageY - mon.y;
-                    this._topbarBlurClone.set_clip(clipX, clipY, Math.ceil(panelW), Math.ceil(panelH));
-                } catch (e) {}
-            };
-
-            this._topbarBlurSignalIds = [
-                Main.panel.connect('notify::allocation', updateTopbarGeometry),
-                Main.panel.connect('notify::position', updateTopbarGeometry),
-                panelBox.connect('notify::allocation', updateTopbarGeometry),
-                Main.overview.connect('showing', () => {
-                    if (this._topbarBlurGroup) this._topbarBlurGroup.visible = false;
-                }),
-                Main.overview.connect('hidden', () => {
-                    updateTopbarGeometry();
-                }),
-            ];
-
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                updateTopbarGeometry();
-                return GLib.SOURCE_REMOVE;
-            });
-        } catch (e) {
-            log(`[QPatcher] Topbar blur error: ${e}`);
-        }
-    }
-
-    _destroyTopbarBlur() {
-        try {
-            if (this._topbarBlurSignalIds) {
-                for (const id of this._topbarBlurSignalIds) {
-                    try { Main.panel?.disconnect(id); } catch (e) {}
-                    try { Main.layoutManager?.panelBox?.disconnect(id); } catch (e) {}
-                    try { Main.overview?.disconnect(id); } catch (e) {}
-                }
-                this._topbarBlurSignalIds = null;
-            }
-            if (this._topbarBlurBgManager) {
-                try { this._topbarBlurBgManager.destroy(); } catch (e) {}
-                this._topbarBlurBgManager = null;
-            }
-            if (this._topbarBlurGroup) {
-                if (this._topbarBlurGroup.get_parent()) {
-                    this._topbarBlurGroup.get_parent().remove_child(this._topbarBlurGroup);
-                }
-                this._topbarBlurGroup.destroy();
-                this._topbarBlurGroup = null;
-            }
-            this._topbarBlurClone = null;
         } catch (e) {}
     }
 
@@ -1109,20 +982,11 @@ export default class QPatcherExtension extends Extension {
                 d2d.set_boolean('custom-theme-customize-running-dots', false);
             }
 
-            // Настоящее размытие для подложки дока
-            const isBlur = style === 'blur';
-            try {
-                const dockManager = DockManager?.getDefault?.();
-                if (dockManager) {
-                    dockManager.setDockBlur(isBlur, blurRadius);
-                }
-            } catch (e) {}
-
             if (style === 'theme-grey') {
                 d2d.set_boolean('custom-background-color', true);
                 d2d.set_string('background-color', themeColor);
                 d2d.set_double('background-opacity', opacity);
-            } else if (isBlur) {
+            } else if (style === 'blur') {
                 d2d.set_boolean('custom-background-color', true);
                 d2d.set_string('background-color', themeColor);
                 d2d.set_double('background-opacity', Math.min(0.40, opacity));
@@ -1338,53 +1202,43 @@ export default class QPatcherExtension extends Extension {
             const keyboard = Main.panel?.statusArea?.keyboard;
             if (!keyboard) return;
 
+            let patching = false;
             const patchLabels = () => {
+                if (patching) return;
                 if (!this._settings?.get_boolean('keyboard-uppercase')) return;
-                const updateActorText = (actor) => {
-                    if (!actor) return;
-                    try {
-                        if (actor.get_text && actor.set_text) {
-                            const current = actor.get_text();
-                            if (current && current.length <= 4 && current !== current.toUpperCase()) {
-                                actor.set_text(current.toUpperCase());
+                patching = true;
+                try {
+                    const updateActorText = (actor) => {
+                        if (!actor || actor.is_finalized?.()) return;
+                        try {
+                            if (actor.get_text && actor.set_text) {
+                                const current = actor.get_text();
+                                if (current && typeof current === 'string' && current.length <= 4 && current !== current.toUpperCase()) {
+                                    actor.set_text(current.toUpperCase());
+                                }
                             }
-                            if (!actor._qpatcherNotifyText) {
-                                actor._qpatcherNotifyText = true;
-                                actor.connectObject('notify::text', () => {
-                                    try {
-                                        if (!this._settings?.get_boolean('keyboard-uppercase')) return;
-                                        const t = actor.get_text();
-                                        if (t && t.length <= 4 && t !== t.toUpperCase()) {
-                                            actor.set_text(t.toUpperCase());
-                                        }
-                                    } catch (e) {}
-                                }, this);
+                            if (actor.get_children) {
+                                for (const child of actor.get_children()) {
+                                    updateActorText(child);
+                                }
                             }
-                        }
-                        if (actor.get_children) {
-                            for (const child of actor.get_children()) {
-                                updateActorText(child);
-                            }
-                        }
-                    } catch (e) {}
-                };
+                        } catch (e) {}
+                    };
 
-                updateActorText(keyboard);
+                    updateActorText(keyboard);
 
-                if (keyboard._indicatorLabels) {
-                    Object.values(keyboard._indicatorLabels).forEach(label => {
-                        updateActorText(label);
-                    });
-                }
-                if (keyboard._inputSources) {
-                    for (const is of keyboard._inputSources) {
-                        if (is?.shortName) is.shortName = is.shortName.toUpperCase();
+                    if (keyboard._indicatorLabels) {
+                        for (const label of Object.values(keyboard._indicatorLabels)) {
+                            updateActorText(label);
+                        }
                     }
-                }
-                if (keyboard._menuItems) {
-                    Object.values(keyboard._menuItems).forEach(item => {
-                        if (item?.indicator) updateActorText(item.indicator);
-                    });
+                    if (keyboard._menuItems) {
+                        for (const item of Object.values(keyboard._menuItems)) {
+                            if (item?.indicator) updateActorText(item.indicator);
+                        }
+                    }
+                } catch (e) {} finally {
+                    patching = false;
                 }
             };
 
@@ -1711,11 +1565,7 @@ export default class QPatcherExtension extends Extension {
             }
         }
 
-        this._destroyTopbarBlur();
         this._destroyOverviewBlur();
-        try {
-            DockManager?.getDefault?.()?.setDockBlur(false);
-        } catch (e) {}
 
         const dateMenu = Main.panel?.statusArea?.dateMenu;
         if (dateMenu) {

@@ -1530,12 +1530,6 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
   border: 1.5px solid rgba(255, 255, 255, 0.4); }
 
-#dashtodockContainer.qpatcher-dock-blurred #dash .dash-background {
-  background-color: rgba(35, 35, 38, 0.40) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
-}
-
 #dashtodockPreviewSeparator.popup-separator-menu-item-horizontal {
   width: 1px;
   height: auto;
