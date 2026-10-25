@@ -806,10 +806,11 @@ export class UnityIndicator extends IndicatorBase {
         if (!this._notificationBadgeBin?.child)
             return;
 
+        const text = this._notificationBadgeBin.child.text || '';
         const themeContext = St.ThemeContext.get_for_stage(global.stage);
         const fontDesc = themeContext.get_font();
         const defaultFontSize = fontDesc.get_size() / 1024;
-        let fontSize = defaultFontSize * 0.9;
+        let fontSize = defaultFontSize * 0.85;
         const {iconSize} = Main.overview.dash;
         const defaultIconSize = Docking.DockManager.settings.get_default_value(
             'dash-max-icon-size').unpack();
@@ -826,13 +827,49 @@ export class UnityIndicator extends IndicatorBase {
             sizeMultiplier = iconSize / defaultIconSize;
         }
 
-        fontSize = Math.round(sizeMultiplier * fontSize);
-        const leftMargin = Math.round(sizeMultiplier * 3);
+        fontSize = Math.max(9, Math.round(sizeMultiplier * fontSize));
+        const badgeSize = Math.max(18, Math.round(fontSize * 1.6));
 
-        this._notificationBadgeBin.child.set_style(
-            `font-size: ${fontSize}px;` +
-            `margin-left: ${leftMargin}px`
-        );
+        const ct = this._notificationBadgeBin.child.clutter_text || this._notificationBadgeBin.child.clutterText;
+        if (ct) {
+            ct.set_line_alignment(Pango.Alignment.CENTER);
+            ct.ellipsize = Pango.EllipsizeMode.NONE;
+            ct.x_align = Clutter.ActorAlign.CENTER;
+            ct.y_align = Clutter.ActorAlign.CENTER;
+            ct.x_expand = true;
+            ct.y_expand = true;
+        }
+
+        if (text.length <= 1) {
+            this._notificationBadgeBin.child.remove_style_class_name('multi-digit');
+            this._notificationBadgeBin.child.set_style(
+                `font-size: ${fontSize}px;` +
+                `width: ${badgeSize}px;` +
+                `min-width: ${badgeSize}px;` +
+                `max-width: ${badgeSize}px;` +
+                `height: ${badgeSize}px;` +
+                `min-height: ${badgeSize}px;` +
+                `max-height: ${badgeSize}px;` +
+                `border-radius: ${Math.round(badgeSize / 2)}px;` +
+                `padding: 0px;` +
+                `margin: 0px;` +
+                `text-align: center;`
+            );
+        } else {
+            this._notificationBadgeBin.child.add_style_class_name('multi-digit');
+            const hPad = Math.round(fontSize * 0.45);
+            this._notificationBadgeBin.child.set_style(
+                `font-size: ${fontSize}px;` +
+                `min-width: ${badgeSize}px;` +
+                `height: ${badgeSize}px;` +
+                `min-height: ${badgeSize}px;` +
+                `max-height: ${badgeSize}px;` +
+                `border-radius: ${Math.round(badgeSize / 2)}px;` +
+                `padding: 0px ${hPad}px;` +
+                `margin: 0px;` +
+                `text-align: center;`
+            );
+        }
     }
 
     _notificationBadgeCountToText(count) {
@@ -876,21 +913,35 @@ export class UnityIndicator extends IndicatorBase {
     _updateNotificationsBadge(text) {
         if (this._notificationBadgeBin) {
             this._notificationBadgeBin.child.text = text;
+            this._updateNotificationBadgeStyle();
             return;
         }
 
-        this._notificationBadgeBin = new St.Bin({
-            child: new St.Label({
-                styleClass: 'notification-badge',
-                text,
-            }),
-            xAlign: Clutter.ActorAlign.END,
-            yAlign: Clutter.ActorAlign.START,
-            xExpand: true,
-            yExpand: true,
+        const label = new St.Label({
+            styleClass: 'notification-badge',
+            text,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
         });
-        this._notificationBadgeBin.child.clutterText.ellipsize =
-            Pango.EllipsizeMode.MIDDLE;
+        const ct = label.clutter_text || label.clutterText;
+        if (ct) {
+            ct.set_line_alignment(Pango.Alignment.CENTER);
+            ct.ellipsize = Pango.EllipsizeMode.NONE;
+            ct.x_align = Clutter.ActorAlign.CENTER;
+            ct.y_align = Clutter.ActorAlign.CENTER;
+            ct.x_expand = true;
+            ct.y_expand = true;
+        }
+
+        this._notificationBadgeBin = new St.Bin({
+            child: label,
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.START,
+            x_expand: true,
+            y_expand: true,
+            margin_right: 5,
+            margin_top: 2,
+        });
 
         this._source._iconContainer.add_child(this._notificationBadgeBin);
         this._updateNotificationBadgeStyle();

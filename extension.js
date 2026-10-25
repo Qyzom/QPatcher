@@ -511,6 +511,7 @@ export default class QPatcherExtension extends Extension {
         this._updateDateMenuStyle();
         this._updateQuickSettingsStyle();
         this._updateNotificationStyle();
+        this._updateNotificationPosition();
         this._applyQuickSettingsFullWidth();
         this._updateDynamicThemeStylesheet();
 
@@ -826,6 +827,7 @@ export default class QPatcherExtension extends Extension {
                         const res = origShow.apply(this, arguments);
                         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                             self._updateNotificationStyle();
+                            self._updateNotificationPosition();
                             return GLib.SOURCE_REMOVE;
                         });
                         return res;
@@ -1106,35 +1108,55 @@ export default class QPatcherExtension extends Extension {
             const hAlign = this._settings.get_string('notification-horizontal-alignment');
 
             // 1. Позиционирование на мониторе
-            const constraints = tray.get_constraints();
+            const monIndex = targetMonitor === 0 ? (Main.layoutManager.primaryIndex ?? 0) : targetMonitor - 1;
+            const constraints = tray.get_constraints ? (tray.get_constraints() || []) : [];
             for (const c of constraints) {
+                if (c && 'index' in c) {
+                    c.index = monIndex;
+                }
                 if (c && 'primary' in c) {
-                    if (targetMonitor === 0) {
-                        c.primary = true;
-                    } else {
-                        c.primary = false;
-                        c.index = targetMonitor - 1;
-                    }
+                    c.primary = targetMonitor === 0;
                 }
             }
 
             // 2. Горизонтальное выравнивание
-            tray._bannerBin.x_expand = false;
+            tray.x_expand = true;
+            tray._bannerBin.x_expand = true;
+            tray._bannerBin.margin_left = 0;
+            tray._bannerBin.margin_right = 0;
+
+            const banners = [];
+            if (tray._banner) banners.push(tray._banner);
+            if (tray._bannerBin?.get_children) {
+                for (const c of tray._bannerBin.get_children()) {
+                    if (c && !banners.includes(c)) banners.push(c);
+                }
+            }
+
             if (hAlign === 'left') {
-                tray.bannerAlignment = Clutter.ActorAlign.START;
                 tray._bannerBin.x_align = Clutter.ActorAlign.START;
-                tray._bannerBin.margin_left = 32;
-                tray._bannerBin.margin_right = 0;
+                for (const b of banners) {
+                    b.x_align = Clutter.ActorAlign.START;
+                    b.x_expand = false;
+                    b.margin_left = 32;
+                    b.margin_right = 0;
+                }
             } else if (hAlign === 'right') {
-                tray.bannerAlignment = Clutter.ActorAlign.END;
                 tray._bannerBin.x_align = Clutter.ActorAlign.END;
-                tray._bannerBin.margin_left = 0;
-                tray._bannerBin.margin_right = 32;
+                for (const b of banners) {
+                    b.x_align = Clutter.ActorAlign.END;
+                    b.x_expand = false;
+                    b.margin_left = 0;
+                    b.margin_right = 32;
+                }
             } else {
-                tray.bannerAlignment = Clutter.ActorAlign.CENTER;
                 tray._bannerBin.x_align = Clutter.ActorAlign.CENTER;
-                tray._bannerBin.margin_left = 0;
-                tray._bannerBin.margin_right = 0;
+                for (const b of banners) {
+                    b.x_align = Clutter.ActorAlign.CENTER;
+                    b.x_expand = false;
+                    b.margin_left = 0;
+                    b.margin_right = 0;
+                }
             }
             tray.queue_relayout();
         } catch (e) {}
