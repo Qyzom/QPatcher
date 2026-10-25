@@ -897,90 +897,10 @@ export default class QPatcherExtension extends Extension {
 
     _setupOverviewBlur() {
         this._destroyOverviewBlur();
-        const style = this._settings.get_string('overview-style');
-        const opacity = this._settings.get_int('overview-opacity') / 100.0;
         const uiGroup = this._getUiGroup();
-        if (!uiGroup) return;
-
-        if (style !== 'blur') {
+        if (uiGroup) {
             uiGroup.remove_style_class_name('qpatcher-overview-blur-active');
-            return;
         }
-
-        uiGroup.add_style_class_name('qpatcher-overview-blur-active');
-        try {
-            if (!Main.layoutManager?.overviewGroup) return;
-            this._overviewBackgroundGroup = new Meta.BackgroundGroup({
-                name: 'qpatcher-overview-background-group',
-                reactive: false,
-            });
-            this._overviewBackgroundGroup.opacity = Math.round(opacity * 255);
-            this._overviewBackgroundManagers = [];
-
-            const radius = this._settings.get_int('blur-sigma') || 30;
-            const monitors = Main.layoutManager.monitors || [];
-            for (let i = 0; i < monitors.length; i++) {
-                const mon = monitors[i];
-                const monActor = new St.Widget({
-                    name: `qpatcher-overview-monitor-${i}`,
-                    x: mon.x,
-                    y: mon.y,
-                    width: mon.width,
-                    height: mon.height,
-                    reactive: false,
-                });
-
-                const source = new St.Widget({
-                    name: `qpatcher-overview-source-${i}`,
-                    visible: false,
-                    reactive: false,
-                });
-                source.add_constraint(new Clutter.BindConstraint({
-                    source: monActor,
-                    coordinate: Clutter.BindCoordinate.SIZE,
-                }));
-                monActor.add_child(source);
-
-                const clone = new Clutter.Clone({
-                    source: source,
-                    reactive: false,
-                });
-                clone.add_constraint(new Clutter.BindConstraint({
-                    source: monActor,
-                    coordinate: Clutter.BindCoordinate.SIZE,
-                }));
-                monActor.add_child(clone);
-
-                const bgManager = new Background.BackgroundManager({
-                    container: source,
-                    monitorIndex: i,
-                    controlPosition: false,
-                });
-                const effect = new Shell.BlurEffect({
-                    brightness: 0.85,
-                    radius: radius,
-                    mode: Shell.BlurMode.ACTOR,
-                });
-                effect.name = `qpatcher-overview-blur-${i}`;
-                clone.add_effect(effect);
-
-                this._overviewBackgroundGroup.add_child(monActor);
-                this._overviewBackgroundManagers.push(bgManager);
-            }
-
-            Main.layoutManager.overviewGroup.insert_child_at_index(this._overviewBackgroundGroup, 0);
-            this._reorderingOverview = false;
-            this._overviewChildAddedId = Main.layoutManager.overviewGroup.connect('child-added', (_, child) => {
-                if (this._reorderingOverview) return;
-                if (child !== this._overviewBackgroundGroup && this._overviewBackgroundGroup) {
-                    this._reorderingOverview = true;
-                    try {
-                        Main.layoutManager.overviewGroup.set_child_at_index(this._overviewBackgroundGroup, 0);
-                    } catch (e) {}
-                    this._reorderingOverview = false;
-                }
-            });
-        } catch (e) {}
     }
 
     _destroyOverviewBlur() {
@@ -2064,19 +1984,19 @@ export default class QPatcherExtension extends Extension {
 
         let x = 0;
         let y = 0;
-        let w = -1;
-        let h = -1;
+        let w = texWidth;
+        let h = texHeight;
 
         if (geometry && Array.isArray(geometry)) {
             let [gx, gy, gw, gh] = geometry;
 
             // Если область не была явно выделена (0x0 или 1x1 при сбросе) или невалидна
             if ((gw <= 2 && gh <= 2) || gw <= 0 || gh <= 0) {
-                // Полноэкранный захват
+                // Полноэкранный захват обоих мониторов (строго точные размеры текстуры, НЕ -1, -1)
                 x = 0;
                 y = 0;
-                w = -1;
-                h = -1;
+                w = texWidth;
+                h = texHeight;
             } else {
                 gx = Math.round(gx);
                 gy = Math.round(gy);
@@ -2094,12 +2014,6 @@ export default class QPatcherExtension extends Extension {
                 // Строго ограничиваем ширину и высоту, чтобы x + w <= texWidth и y + h <= texHeight
                 w = Math.max(1, Math.min(gw, texWidth - x));
                 h = Math.max(1, Math.min(gh, texHeight - y));
-
-                // Если выделение покрывает всю текстуру, используем -1, -1 для нативного быстрого рендера
-                if (x === 0 && y === 0 && w === texWidth && h === texHeight) {
-                    w = -1;
-                    h = -1;
-                }
             }
         }
 
