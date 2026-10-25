@@ -270,6 +270,10 @@ export default class QPatcherExtension extends Extension {
             this._syncDashToDockSettings();
         });
 
+        watchKey(this._settings, 'dock-show-trash', () => {
+            this._syncDashToDockSettings();
+        });
+
         watchKey(this._settings, 'dock-always-visible', () => {
             this._syncDashToDockSettings();
         });
@@ -432,7 +436,11 @@ export default class QPatcherExtension extends Extension {
 
                 for (const child of box.get_children()) {
                     const type = child.constructor.name;
-                    if (type === 'ShutdownItem') child.visible = !hidePower;
+                    if (type === 'PowerToggle') {
+                        if (!child.reactive || child.has_style_pseudo_class?.('insensitive')) {
+                            child.visible = false;
+                        }
+                    } else if (type === 'ShutdownItem') child.visible = !hidePower;
                     else if (type === 'ScreenshotItem') child.visible = !hideScreenshot;
                     else if (type === 'SettingsItem') child.visible = !hideSettings;
                     else if (type === 'LockItem') child.visible = !hideLock;
@@ -740,6 +748,13 @@ export default class QPatcherExtension extends Extension {
                 /* ======================================================== */
 
                 /* Quick Settings Toggles */
+                .quick-settings-system-item .power-item:insensitive,
+                .quick-settings-system-item .power-item:not([reactive]) {
+                    background-color: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+
                 .qpatcher-recolor-menus .quick-toggle,
                 .qpatcher-menus-theme .quick-toggle,
                 .qpatcher-qs-theme .quick-toggle,
@@ -1149,6 +1164,7 @@ export default class QPatcherExtension extends Extension {
             const hideBadges = this._getSettingBool('dock-notification-badge-hide');
             const hideShowApps = this._getSettingBool('dock-show-apps-hide');
             const showMounts = this._getSettingBool('dock-show-mounts');
+            const showTrash = this._getSettingBool('dock-show-trash');
             const runningBar = this._getSettingBool('dock-running-indicator-bar');
             const hideDots = this._getSettingBool('dock-running-dots-hide');
             const iconSize = this._getSettingInt('dock-icon-size', 48);
@@ -1191,6 +1207,7 @@ export default class QPatcherExtension extends Extension {
             }
             d2d.set_boolean('show-mounts', showMounts);
             d2d.set_boolean('show-mounts-only-mounted', false);
+            d2d.set_boolean('show-trash', showTrash);
             d2d.set_boolean('hide-tooltip', hideTooltips);
             d2d.set_boolean('show-icons-notifications-counter', !hideBadges);
             d2d.set_boolean('show-show-apps-button', !hideShowApps);
@@ -1344,6 +1361,15 @@ export default class QPatcherExtension extends Extension {
             const toggles = [];
             for (const child of grid) {
                 if (!child.visible) continue;
+                if (child.has_style_class_name?.('background-apps-quick-toggle') ||
+                    child.constructor?.name === 'BackgroundAppsToggle') {
+                    if (layout.child_set_property) {
+                        try { layout.child_set_property(grid, child, 'column-span', 2); } catch (e) {}
+                    }
+                    const meta = layout.get_child_meta ? layout.get_child_meta(grid, child) : null;
+                    if (meta) { meta.columnSpan = 2; meta.column_span = 2; }
+                    continue;
+                }
                 const isToggle = child.has_style_class_name?.('quick-toggle') ||
                                  child.has_style_class_name?.('quick-toggle-has-menu') ||
                                  child.constructor?.name?.endsWith('Toggle');

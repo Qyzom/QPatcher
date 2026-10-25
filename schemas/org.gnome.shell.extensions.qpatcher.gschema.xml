@@ -117,6 +117,12 @@
       <description>Show mounted drives and USB devices on dock</description>
     </key>
 
+    <key name="dock-show-trash" type="b">
+      <default>false</default>
+      <summary>Show Trash Can Icon</summary>
+      <description>Show or hide the trash can icon in the dock</description>
+    </key>
+
     <key name="dock-always-visible" type="b">
       <default>false</default>
       <summary>Always Visible Dock on Desktop</summary>

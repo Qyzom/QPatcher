@@ -209,6 +209,7 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         addSwitch(dockFeaturesGroup, 'Цвет счетчика в цвет акцента', 'Окрашивать бейдж уведомлений в акцентный цвет вместо красного', 'dock-notification-badge-accent');
         const rowBar = addSwitch(dockFeaturesGroup, 'Одиночная полоска активности', 'Отображать одну полоску под активными приложениями вместо точек', 'dock-running-indicator-bar');
         addSwitch(dockFeaturesGroup, 'Отображать съемные носители и диски', 'Показывать подключенные USB-флешки и смонтированные накопители', 'dock-show-mounts');
+        addSwitch(dockFeaturesGroup, 'Отображать корзину', 'Показывать иконку корзины в доке', 'dock-show-trash');
         addSwitch(dockFeaturesGroup, 'Скрыть счетчик уведомлений', 'Не отображать бейдж с количеством уведомлений на иконках', 'dock-notification-badge-hide');
         addSwitch(dockFeaturesGroup, 'Скрыть всплывающие подсказки', 'Отключить всплывающие подписи при наведении мыши', 'dock-tooltips-hide');
         addSwitch(dockFeaturesGroup, 'Скрыть разделитель', 'Скрыть полосу между избранными и запущенными', 'dock-separator-hide');
