@@ -803,16 +803,19 @@ export class UnityIndicator extends IndicatorBase {
     }
 
     _updateNotificationBadgeStyle() {
+        if (!this._notificationBadgeBin?.child)
+            return;
+
+        const text = this._notificationBadgeBin.child.text || '';
         const themeContext = St.ThemeContext.get_for_stage(global.stage);
         const fontDesc = themeContext.get_font();
         const defaultFontSize = fontDesc.get_size() / 1024;
-        let fontSize = defaultFontSize * 0.9;
+        let fontSize = defaultFontSize * 0.85;
         const {iconSize} = Main.overview.dash;
         const defaultIconSize = Docking.DockManager.settings.get_default_value(
             'dash-max-icon-size').unpack();
 
         if (!fontDesc.get_size_is_absolute()) {
-            // fontSize was expressed in points, so convert to pixel
             fontSize /= 0.75;
         }
 
@@ -824,13 +827,36 @@ export class UnityIndicator extends IndicatorBase {
             sizeMultiplier = iconSize / defaultIconSize;
         }
 
-        fontSize = Math.round(sizeMultiplier * fontSize);
-        const leftMargin = Math.round(sizeMultiplier * 3);
+        fontSize = Math.max(9, Math.round(sizeMultiplier * fontSize));
+        const badgeSize = Math.max(18, Math.round(fontSize * 1.6));
 
-        this._notificationBadgeBin.child.set_style(
-            `font-size: ${fontSize}px;` +
-            `margin-left: ${leftMargin}px`
-        );
+        if (text.length <= 1) {
+            this._notificationBadgeBin.child.remove_style_class_name('multi-digit');
+            this._notificationBadgeBin.child.set_style(
+                `font-size: ${fontSize}px;` +
+                `min-width: ${badgeSize}px;` +
+                `width: ${badgeSize}px;` +
+                `height: ${badgeSize}px;` +
+                `min-height: ${badgeSize}px;` +
+                `border-radius: ${Math.round(badgeSize / 2)}px;` +
+                `padding: 0px;` +
+                `margin: 0px;` +
+                `text-align: center;`
+            );
+        } else {
+            this._notificationBadgeBin.child.add_style_class_name('multi-digit');
+            const hPadding = Math.round(fontSize * 0.4);
+            this._notificationBadgeBin.child.set_style(
+                `font-size: ${fontSize}px;` +
+                `min-width: ${badgeSize}px;` +
+                `height: ${badgeSize}px;` +
+                `min-height: ${badgeSize}px;` +
+                `border-radius: ${Math.round(badgeSize / 2)}px;` +
+                `padding: 0px ${hPadding}px;` +
+                `margin: 0px;` +
+                `text-align: center;`
+            );
+        }
     }
 
     _notificationBadgeCountToText(count) {
@@ -874,21 +900,28 @@ export class UnityIndicator extends IndicatorBase {
     _updateNotificationsBadge(text) {
         if (this._notificationBadgeBin) {
             this._notificationBadgeBin.child.text = text;
+            this._updateNotificationBadgeStyle();
             return;
         }
 
+        const label = new St.Label({
+            styleClass: 'notification-badge',
+            text,
+            xAlign: Clutter.ActorAlign.CENTER,
+            yAlign: Clutter.ActorAlign.CENTER,
+        });
+        label.clutterText.set_line_alignment(Pango.Alignment.CENTER);
+        label.clutterText.ellipsize = Pango.EllipsizeMode.NONE;
+
         this._notificationBadgeBin = new St.Bin({
-            child: new St.Label({
-                styleClass: 'notification-badge',
-                text,
-            }),
+            child: label,
             xAlign: Clutter.ActorAlign.END,
             yAlign: Clutter.ActorAlign.START,
             xExpand: true,
             yExpand: true,
+            translation_x: -3,
+            translation_y: 3,
         });
-        this._notificationBadgeBin.child.clutterText.ellipsize =
-            Pango.EllipsizeMode.MIDDLE;
 
         this._source._iconContainer.add_child(this._notificationBadgeBin);
         this._updateNotificationBadgeStyle();

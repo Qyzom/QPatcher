@@ -13,6 +13,7 @@ import {
 import {
     AppMenu,
     AppDisplay,
+    Background,
     Layout,
     Main,
     OverviewControls,
@@ -542,6 +543,124 @@ const DockedDash = GObject.registerClass({
             GLib.source_remove(this._optionalScrollWorkspaceSwitchDeadTimeId);
             delete this._optionalScrollWorkspaceSwitchDeadTimeId;
         }
+
+        this.destroyBlur();
+    }
+
+    setupBlur(blurRadius = 30) {
+        this.destroyBlur();
+        try {
+            const mon = this._monitor || Main.layoutManager.monitors[this.monitorIndex] || Main.layoutManager.primaryMonitor;
+            if (!mon)
+                return;
+
+            this.add_style_class_name('qpatcher-dock-blurred');
+
+            this._blurGroup = new Meta.BackgroundGroup({
+                name: 'qpatcher-dock-blur-group',
+            });
+
+            const source = new St.Widget({
+                name: 'qpatcher-dock-blur-source',
+                visible: false,
+                width: mon.width,
+                height: mon.height,
+            });
+            this._blurGroup.add_child(source);
+
+            this._blurClone = new Clutter.Clone({
+                source: source,
+                width: mon.width,
+                height: mon.height,
+            });
+            this._blurGroup.add_child(this._blurClone);
+
+            this._blurBgManager = new Background.BackgroundManager({
+                container: source,
+                monitorIndex: mon.index,
+                controlPosition: false,
+            });
+
+            const effect = new Shell.BlurEffect({
+                brightness: 0.85,
+                radius: blurRadius,
+                mode: Shell.BlurMode.ACTOR,
+            });
+            this._blurClone.add_effect(effect);
+
+            this._box.insert_child_below(this._blurGroup, this.dash);
+
+            const updateGeometry = () => {
+                if (!this._blurGroup || !this.dash?._background || !this._blurClone)
+                    return;
+                try {
+                    if (Main.overview?.visible) {
+                        this._blurGroup.visible = false;
+                        return;
+                    }
+                    this._blurGroup.visible = this.dash.visible && this._box.visible;
+
+                    const [bgStageX, bgStageY] = this.dash._background.get_transformed_position();
+                    const [bgStageW, bgStageH] = this.dash._background.get_transformed_size();
+                    if (bgStageW <= 0 || bgStageH <= 0)
+                        return;
+
+                    const [boxStageX, boxStageY] = this._box.get_transformed_position();
+
+                    this._blurClone.x = mon.x - boxStageX;
+                    this._blurClone.y = mon.y - boxStageY;
+
+                    const clipX = bgStageX - mon.x;
+                    const clipY = bgStageY - mon.y;
+                    this._blurClone.set_clip(clipX, clipY, Math.ceil(bgStageW), Math.ceil(bgStageH));
+                } catch (e) {}
+            };
+
+            this._blurSignals = [
+                this.dash.connect('notify::allocation', updateGeometry),
+                this.dash.connect('notify::position', updateGeometry),
+                this.dash.connect('notify::visible', updateGeometry),
+                this.dash._background.connect('notify::allocation', updateGeometry),
+                this._slider.connect('notify::slide-x', updateGeometry),
+                this._slider.connect('notify::slide-y', updateGeometry),
+                this._slider.connect('notify::position', updateGeometry),
+                Main.overview.connect('showing', () => {
+                    if (this._blurGroup) this._blurGroup.visible = false;
+                }),
+                Main.overview.connect('hidden', () => {
+                    updateGeometry();
+                }),
+            ];
+
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                updateGeometry();
+                return GLib.SOURCE_REMOVE;
+            });
+        } catch (e) {
+            log(`[QPatcher] Dock setupBlur error: ${e}`);
+        }
+    }
+
+    destroyBlur() {
+        this.remove_style_class_name('qpatcher-dock-blurred');
+        if (this._blurSignals) {
+            for (const id of this._blurSignals) {
+                try { this.dash?.disconnect(id); } catch (e) {}
+                try { this.dash?._background?.disconnect(id); } catch (e) {}
+                try { this._slider?.disconnect(id); } catch (e) {}
+                try { Main.overview?.disconnect(id); } catch (e) {}
+            }
+            this._blurSignals = null;
+        }
+        if (this._blurBgManager) {
+            try { this._blurBgManager.destroy(); } catch (e) {}
+            this._blurBgManager = null;
+        }
+        if (this._blurGroup) {
+            try { this._blurGroup.destroy(); } catch (e) {}
+            this._blurGroup = null;
+        }
+        this._blurClone = null;
     }
 
     _prepareStartupAnimation() {
@@ -2274,9 +2393,24 @@ export class DockManager {
         this.emit('docks-ready');
     }
 
+    setDockBlur(enabled, radius = 30) {
+        this._blurEnabled = enabled;
+        this._blurRadius = radius;
+        for (const dock of (this._allDocks || [])) {
+            if (enabled)
+                dock.setupBlur(radius);
+            else
+                dock.destroyBlur();
+        }
+    }
+
     _createDock(params) {
         const dock = new DockedDash(params);
         this._allDocks.push(dock);
+
+        if (this._blurEnabled) {
+            dock.setupBlur(this._blurRadius);
+        }
 
         // connect app icon into the view selector
         dock.dash.showAppsButton.connectObject('notify::checked',

@@ -131,17 +131,28 @@ export default class QPatcherExtension extends Extension {
 
         watchKey(this._settings, 'topbar-style', () => {
             updatePanelColor();
+            this._setupTopbarBlur();
             this._updateDynamicThemeStylesheet();
         });
         watchKey(this._settings, 'topbar-opacity', () => {
             updatePanelColor();
+            this._setupTopbarBlur();
             this._updateDynamicThemeStylesheet();
         });
         watchKey(this._settings, 'theme-color', () => {
             updatePanelColor();
             this._updateDynamicThemeStylesheet();
+            this._syncDashToDockSettings();
         });
-        watchKey(this._settings, 'blur-sigma', updatePanelColor);
+        watchKey(this._settings, 'blur-sigma', () => {
+            updatePanelColor();
+            this._setupTopbarBlur();
+            this._setupOverviewBlur();
+            this._updateDateMenuStyle();
+            this._updateQuickSettingsStyle();
+            this._updateNotificationStyle();
+            this._syncDashToDockSettings();
+        });
 
         // Видимость элементов панели
         watchKey(this._settings, 'panel-visibility', () => {
@@ -519,6 +530,7 @@ export default class QPatcherExtension extends Extension {
 
         // Первичная инициализация всех стилей и эффектов
         updatePanelColor();
+        this._setupTopbarBlur();
         this._updatePanelMonitor();
         this._syncDashToDockSettings();
         this._setupOverviewBlur();
@@ -606,6 +618,12 @@ export default class QPatcherExtension extends Extension {
                 #panel.qpatcher-topbar-blur,
                 #panelBox #panel.qpatcher-topbar-blur {
                     background-color: ${this._hexToRgba(themeColor, Math.min(0.45, topbarOpacity))} !important;
+                }
+
+                #dashtodockContainer.qpatcher-dock-blurred #dash .dash-background {
+                    background-color: ${this._hexToRgba(themeColor, 0.40)} !important;
+                    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
                 }
 
                 .notification-banner,
@@ -760,6 +778,123 @@ export default class QPatcherExtension extends Extension {
                 this._overviewBackgroundGroup.destroy();
                 this._overviewBackgroundGroup = null;
             }
+        } catch (e) {}
+    }
+
+    _setupTopbarBlur() {
+        this._destroyTopbarBlur();
+        const style = this._settings?.get_string('topbar-style') || 'theme-grey';
+        if (style !== 'blur') return;
+
+        try {
+            const panelBox = Main.layoutManager?.panelBox;
+            if (!panelBox || !Main.panel) return;
+
+            const mon = Main.layoutManager.primaryMonitor;
+            if (!mon) return;
+
+            this._topbarBlurGroup = new Meta.BackgroundGroup({
+                name: 'qpatcher-topbar-blur-group',
+            });
+
+            const source = new St.Widget({
+                name: 'qpatcher-topbar-blur-source',
+                visible: false,
+                width: mon.width,
+                height: mon.height,
+            });
+            this._topbarBlurGroup.add_child(source);
+
+            this._topbarBlurClone = new Clutter.Clone({
+                source: source,
+                width: mon.width,
+                height: mon.height,
+            });
+            this._topbarBlurGroup.add_child(this._topbarBlurClone);
+
+            this._topbarBlurBgManager = new Background.BackgroundManager({
+                container: source,
+                monitorIndex: mon.index,
+                controlPosition: false,
+            });
+
+            const blurRadius = this._settings?.get_int('blur-sigma') || 30;
+            const effect = new Shell.BlurEffect({
+                brightness: 0.85,
+                radius: blurRadius,
+                mode: Shell.BlurMode.ACTOR,
+            });
+            this._topbarBlurClone.add_effect(effect);
+
+            panelBox.insert_child_at_index(this._topbarBlurGroup, 0);
+
+            const updateTopbarGeometry = () => {
+                if (!this._topbarBlurGroup || !Main.panel || !this._topbarBlurClone) return;
+                try {
+                    if (Main.overview?.visible) {
+                        this._topbarBlurGroup.visible = false;
+                        return;
+                    }
+                    this._topbarBlurGroup.visible = Main.panel.visible && panelBox.visible;
+
+                    const [panelStageX, panelStageY] = Main.panel.get_transformed_position();
+                    const [panelW, panelH] = Main.panel.get_transformed_size();
+                    if (panelW <= 0 || panelH <= 0) return;
+
+                    const [boxStageX, boxStageY] = panelBox.get_transformed_position();
+
+                    this._topbarBlurClone.x = mon.x - boxStageX;
+                    this._topbarBlurClone.y = mon.y - boxStageY;
+
+                    const clipX = panelStageX - mon.x;
+                    const clipY = panelStageY - mon.y;
+                    this._topbarBlurClone.set_clip(clipX, clipY, Math.ceil(panelW), Math.ceil(panelH));
+                } catch (e) {}
+            };
+
+            this._topbarBlurSignalIds = [
+                Main.panel.connect('notify::allocation', updateTopbarGeometry),
+                Main.panel.connect('notify::position', updateTopbarGeometry),
+                panelBox.connect('notify::allocation', updateTopbarGeometry),
+                Main.overview.connect('showing', () => {
+                    if (this._topbarBlurGroup) this._topbarBlurGroup.visible = false;
+                }),
+                Main.overview.connect('hidden', () => {
+                    updateTopbarGeometry();
+                }),
+            ];
+
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                updateTopbarGeometry();
+                return GLib.SOURCE_REMOVE;
+            });
+        } catch (e) {
+            log(`[QPatcher] Topbar blur error: ${e}`);
+        }
+    }
+
+    _destroyTopbarBlur() {
+        try {
+            if (this._topbarBlurSignalIds) {
+                for (const id of this._topbarBlurSignalIds) {
+                    try { Main.panel?.disconnect(id); } catch (e) {}
+                    try { Main.layoutManager?.panelBox?.disconnect(id); } catch (e) {}
+                    try { Main.overview?.disconnect(id); } catch (e) {}
+                }
+                this._topbarBlurSignalIds = null;
+            }
+            if (this._topbarBlurBgManager) {
+                try { this._topbarBlurBgManager.destroy(); } catch (e) {}
+                this._topbarBlurBgManager = null;
+            }
+            if (this._topbarBlurGroup) {
+                if (this._topbarBlurGroup.get_parent()) {
+                    this._topbarBlurGroup.get_parent().remove_child(this._topbarBlurGroup);
+                }
+                this._topbarBlurGroup.destroy();
+                this._topbarBlurGroup = null;
+            }
+            this._topbarBlurClone = null;
         } catch (e) {}
     }
 
@@ -975,59 +1110,23 @@ export default class QPatcherExtension extends Extension {
             }
 
             // Настоящее размытие для подложки дока
-            const findD2DBackgrounds = () => {
-                const backgrounds = [];
-                try {
-                    const stageChildren = global.stage.get_children();
-                    for (const child of stageChildren) {
-                        if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
-                            const slider = child._slider || child.get_children?.()[0];
-                            const content = slider?.get_child?.() || slider;
-                            if (content) {
-                                for (const c of content.get_children?.() || []) {
-                                    if (c.name === 'dash' || (c.has_style_class_name && c.has_style_class_name('dash'))) {
-                                        if (c._background) backgrounds.push(c._background);
-                                        else backgrounds.push(c);
-                                    }
-                                }
-                            }
-                            if (child.dash?._background) backgrounds.push(child.dash._background);
-                        }
-                    }
-                    if (Main.overview?.dash?._background) backgrounds.push(Main.overview.dash._background);
-                } catch (e) {}
-                return backgrounds;
-            };
-
-            const dockBgs = findD2DBackgrounds();
+            const isBlur = style === 'blur';
+            try {
+                const dockManager = DockManager?.getDefault?.();
+                if (dockManager) {
+                    dockManager.setDockBlur(isBlur, blurRadius);
+                }
+            } catch (e) {}
 
             if (style === 'theme-grey') {
-                for (const bg of dockBgs) {
-                    if (bg?.remove_effect_by_name) bg.remove_effect_by_name('qpatcher-dock-blur');
-                }
                 d2d.set_boolean('custom-background-color', true);
                 d2d.set_string('background-color', themeColor);
                 d2d.set_double('background-opacity', opacity);
-            } else if (style === 'blur') {
+            } else if (isBlur) {
                 d2d.set_boolean('custom-background-color', true);
                 d2d.set_string('background-color', themeColor);
-                d2d.set_double('background-opacity', Math.min(0.35, opacity));
-                for (const bg of dockBgs) {
-                    if (!bg.get_effect?.('qpatcher-dock-blur')) {
-                        const effect = new Shell.BlurEffect({
-                            name: 'qpatcher-dock-blur',
-                            mode: Shell.BlurMode.BACKGROUND,
-                            radius: blurRadius,
-                        });
-                        bg.add_effect(effect);
-                    } else {
-                        bg.get_effect('qpatcher-dock-blur').radius = blurRadius;
-                    }
-                }
+                d2d.set_double('background-opacity', Math.min(0.40, opacity));
             } else {
-                for (const bg of dockBgs) {
-                    if (bg?.remove_effect_by_name) bg.remove_effect_by_name('qpatcher-dock-blur');
-                }
                 d2d.set_boolean('custom-background-color', false);
                 d2d.set_double('background-opacity', opacity);
             }
@@ -1612,21 +1711,10 @@ export default class QPatcherExtension extends Extension {
             }
         }
 
+        this._destroyTopbarBlur();
+        this._destroyOverviewBlur();
         try {
-            const stageChildren = global.stage.get_children();
-            for (const child of stageChildren) {
-                if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
-                    const slider = child._slider || child.get_children?.()[0];
-                    const content = slider?.get_child?.() || slider;
-                    if (content) {
-                        for (const c of content.get_children?.() || []) {
-                            if (c._background?.remove_effect_by_name) c._background.remove_effect_by_name('qpatcher-dock-blur');
-                            if (c.remove_effect_by_name) c.remove_effect_by_name('qpatcher-dock-blur');
-                        }
-                    }
-                    if (child.dash?._background?.remove_effect_by_name) child.dash._background.remove_effect_by_name('qpatcher-dock-blur');
-                }
-            }
+            DockManager?.getDefault?.()?.setDockBlur(false);
         } catch (e) {}
 
         const dateMenu = Main.panel?.statusArea?.dateMenu;

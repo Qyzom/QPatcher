@@ -136,7 +136,7 @@
     </key>
 
     <key name="dock-notification-badge-accent" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Accent Color Notification Badge</summary>
       <description>Use system accent color instead of red for notification badges</description>
     </key>
