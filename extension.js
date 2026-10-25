@@ -983,14 +983,17 @@ export default class QPatcherExtension extends Extension {
             }
 
             if (style === 'theme-grey') {
+                d2d.set_boolean('apply-custom-theme', false);
                 d2d.set_boolean('custom-background-color', true);
                 d2d.set_string('background-color', themeColor);
                 d2d.set_double('background-opacity', opacity);
             } else if (style === 'blur') {
+                d2d.set_boolean('apply-custom-theme', false);
                 d2d.set_boolean('custom-background-color', true);
                 d2d.set_string('background-color', themeColor);
                 d2d.set_double('background-opacity', Math.min(0.40, opacity));
             } else {
+                d2d.set_boolean('apply-custom-theme', true);
                 d2d.set_boolean('custom-background-color', false);
                 d2d.set_double('background-opacity', opacity);
             }
@@ -1251,11 +1254,12 @@ export default class QPatcherExtension extends Extension {
                 this._origSetSourceAsActive = keyboard._setSourceAsActive;
                 const self = this;
                 keyboard._setSourceAsActive = function(source) {
-                    if (self._settings?.get_boolean('keyboard-uppercase') && source?.shortName) {
-                        source.shortName = source.shortName.toUpperCase();
-                    }
-                    self._origSetSourceAsActive.call(this, source);
-                    patchLabels();
+                    const ret = self._origSetSourceAsActive.call(this, source);
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        patchLabels();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                    return ret;
                 };
             }
 
@@ -1263,8 +1267,12 @@ export default class QPatcherExtension extends Extension {
                 this._origCurrentSourceChanged = keyboard._currentSourceChanged;
                 const self = this;
                 keyboard._currentSourceChanged = function(manager, oldSource) {
-                    self._origCurrentSourceChanged.call(this, manager, oldSource);
-                    patchLabels();
+                    const ret = self._origCurrentSourceChanged.call(this, manager, oldSource);
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        patchLabels();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                    return ret;
                 };
             }
 
@@ -1272,8 +1280,12 @@ export default class QPatcherExtension extends Extension {
                 this._origSourcesChanged = keyboard._sourcesChanged;
                 const self = this;
                 keyboard._sourcesChanged = function() {
-                    self._origSourcesChanged.call(this);
-                    patchLabels();
+                    const ret = self._origSourcesChanged.call(this);
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        patchLabels();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                    return ret;
                 };
             }
 
@@ -1293,32 +1305,35 @@ export default class QPatcherExtension extends Extension {
     }
 
     _updateKeyboardLayoutText() {
-        if (!this._settings.get_boolean('keyboard-uppercase')) return;
+        if (!this._settings?.get_boolean('keyboard-uppercase')) return;
         try {
             const keyboard = Main.panel?.statusArea?.keyboard;
             if (!keyboard) return;
 
-            if (keyboard._indicatorLabels) {
-                Object.values(keyboard._indicatorLabels).forEach(label => {
-                    if (label?.get_text && label?.set_text) {
-                        const t = label.get_text();
-                        if (t) label.set_text(t.toUpperCase());
+            const updateActorText = (actor) => {
+                if (!actor || actor.is_finalized?.() || (actor instanceof Clutter.Actor && actor.is_in_destruction?.())) return;
+                try {
+                    if (actor.get_text && actor.set_text) {
+                        const current = actor.get_text();
+                        if (current && typeof current === 'string' && current.length <= 4 && current !== current.toUpperCase()) {
+                            actor.set_text(current.toUpperCase());
+                        }
                     }
-                });
-            }
-
-            const findAndUppercase = (actor) => {
-                if (actor.get_text && actor.set_text) {
-                    const text = actor.get_text();
-                    if (text && text.length <= 4) {
-                        actor.set_text(text.toUpperCase());
+                    if (actor.get_children) {
+                        for (const child of actor.get_children()) {
+                            updateActorText(child);
+                        }
                     }
-                }
-                if (actor.get_children) {
-                    for (const c of actor.get_children()) findAndUppercase(c);
-                }
+                } catch (e) {}
             };
-            findAndUppercase(keyboard);
+
+            updateActorText(keyboard);
+
+            if (keyboard._indicatorLabels) {
+                for (const label of Object.values(keyboard._indicatorLabels)) {
+                    updateActorText(label);
+                }
+            }
         } catch (e) {}
     }
 

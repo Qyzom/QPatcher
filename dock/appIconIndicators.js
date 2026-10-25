@@ -834,10 +834,12 @@ export class UnityIndicator extends IndicatorBase {
             this._notificationBadgeBin.child.remove_style_class_name('multi-digit');
             this._notificationBadgeBin.child.set_style(
                 `font-size: ${fontSize}px;` +
-                `min-width: ${badgeSize}px;` +
                 `width: ${badgeSize}px;` +
+                `min-width: ${badgeSize}px;` +
+                `max-width: ${badgeSize}px;` +
                 `height: ${badgeSize}px;` +
                 `min-height: ${badgeSize}px;` +
+                `max-height: ${badgeSize}px;` +
                 `border-radius: ${Math.round(badgeSize / 2)}px;` +
                 `padding: 0px;` +
                 `margin: 0px;` +
@@ -845,12 +847,13 @@ export class UnityIndicator extends IndicatorBase {
             );
         } else {
             this._notificationBadgeBin.child.add_style_class_name('multi-digit');
-            const hPadding = Math.round(fontSize * 0.4);
+            const hPadding = Math.round(fontSize * 0.45);
             this._notificationBadgeBin.child.set_style(
                 `font-size: ${fontSize}px;` +
                 `min-width: ${badgeSize}px;` +
                 `height: ${badgeSize}px;` +
                 `min-height: ${badgeSize}px;` +
+                `max-height: ${badgeSize}px;` +
                 `border-radius: ${Math.round(badgeSize / 2)}px;` +
                 `padding: 0px ${hPadding}px;` +
                 `margin: 0px;` +
@@ -907,20 +910,27 @@ export class UnityIndicator extends IndicatorBase {
         const label = new St.Label({
             styleClass: 'notification-badge',
             text,
-            xAlign: Clutter.ActorAlign.CENTER,
-            yAlign: Clutter.ActorAlign.CENTER,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
         });
-        label.clutterText.set_line_alignment(Pango.Alignment.CENTER);
-        label.clutterText.ellipsize = Pango.EllipsizeMode.NONE;
+        const ct = label.clutter_text || label.clutterText;
+        if (ct) {
+            ct.set_line_alignment(Pango.Alignment.CENTER);
+            ct.ellipsize = Pango.EllipsizeMode.NONE;
+            ct.x_align = Clutter.ActorAlign.CENTER;
+            ct.y_align = Clutter.ActorAlign.CENTER;
+            ct.x_expand = true;
+            ct.y_expand = true;
+        }
 
         this._notificationBadgeBin = new St.Bin({
             child: label,
-            xAlign: Clutter.ActorAlign.END,
-            yAlign: Clutter.ActorAlign.START,
-            xExpand: true,
-            yExpand: true,
-            translation_x: -3,
-            translation_y: 3,
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.START,
+            x_expand: true,
+            y_expand: true,
+            translation_x: -6,
+            translation_y: 6,
         });
 
         this._source._iconContainer.add_child(this._notificationBadgeBin);
