@@ -29,9 +29,44 @@ export default class QPatcherExtension extends Extension {
         return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
     }
 
+    _getSettingBool(key, fallback = false) {
+        try {
+            if (this._settings?.settings_schema?.has_key(key))
+                return this._settings.get_boolean(key);
+        } catch (e) {}
+        return fallback;
+    }
+
+    _getSettingString(key, fallback = '') {
+        try {
+            if (this._settings?.settings_schema?.has_key(key))
+                return this._settings.get_string(key);
+        } catch (e) {}
+        return fallback;
+    }
+
+    _getSettingInt(key, fallback = 0) {
+        try {
+            if (this._settings?.settings_schema?.has_key(key))
+                return this._settings.get_int(key);
+        } catch (e) {}
+        return fallback;
+    }
+
+    _setSettingBool(key, val) {
+        try {
+            if (this._settings?.settings_schema?.has_key(key))
+                this._settings.set_boolean(key, val);
+        } catch (e) {}
+    }
+
     enable() {
         this._settings = this.getSettings();
         this._signals = [];
+
+        const getBool = (k, def = false) => this._getSettingBool(k, def);
+        const getStr = (k, def = '') => this._getSettingString(k, def);
+        const getInt = (k, def = 0) => this._getSettingInt(k, def);
 
         this._dockAdapter = {
             uuid: this.uuid,
@@ -52,9 +87,28 @@ export default class QPatcherExtension extends Extension {
         this._shellSettings = new Gio.Settings({ schema_id: 'org.gnome.shell' });
 
         const watchKey = (settings, key, handler) => {
-            const id = settings.connect(`changed::${key}`, () => handler());
-            this._signals.push({ obj: settings, id });
-            handler();
+            if (!settings) return;
+            try {
+                if (settings.settings_schema && !settings.settings_schema.has_key(key)) {
+                    return;
+                }
+                const id = settings.connect(`changed::${key}`, () => {
+                    try {
+                        handler();
+                    } catch (e) {
+                        console.warn(`[QPatcher] Error handling change for ${key}:`, e);
+                    }
+                });
+                this._signals.push({ obj: settings, id });
+            } catch (e) {
+                console.warn(`[QPatcher] Failed to watch key ${key}:`, e);
+                return;
+            }
+            try {
+                handler();
+            } catch (e) {
+                console.warn(`[QPatcher] Error in initial handler for ${key}:`, e);
+            }
         };
 
         const toggleClass = (className, shouldAdd) => {
@@ -81,30 +135,27 @@ export default class QPatcherExtension extends Extension {
 
         watchKey(this._settings, 'clock-show-weekday', () => {
             try {
-                this._interfaceSettings.set_boolean('clock-show-weekday', this._settings.get_boolean('clock-show-weekday'));
+                this._interfaceSettings.set_boolean('clock-show-weekday', getBool('clock-show-weekday'));
             } catch (e) {}
         });
 
         watchKey(this._settings, 'clock-show-seconds', () => {
             try {
-                this._interfaceSettings.set_boolean('clock-show-seconds', this._settings.get_boolean('clock-show-seconds'));
+                this._interfaceSettings.set_boolean('clock-show-seconds', getBool('clock-show-seconds'));
             } catch (e) {}
         });
 
         // Цвет фона и прозрачность панели
         const updatePanelColor = () => {
-            const style = this._settings.get_string('topbar-style');
-            const opacity = this._settings.get_int('topbar-opacity') / 100.0;
+            const style = getStr('topbar-style', 'default');
+            const opacity = getInt('topbar-opacity', 100) / 100.0;
 
             if (Main.panel) {
                 Main.panel.opacity = Math.round(opacity * 255);
                 Main.panel.set_style(null);
 
                 const hasTheme = Main.panel.has_style_class_name('qpatcher-topbar-theme');
-                if (Main.panel.remove_effect_by_name) Main.panel.remove_effect_by_name('qpatcher-panel-blur');
-                if (Main.panel.has_style_class_name('qpatcher-topbar-blur')) Main.panel.remove_style_class_name('qpatcher-topbar-blur');
-
-                if (style === 'theme-grey' || style === 'blur') {
+                if (style === 'theme-grey') {
                     if (!hasTheme) Main.panel.add_style_class_name('qpatcher-topbar-theme');
                 } else {
                     if (hasTheme) Main.panel.remove_style_class_name('qpatcher-topbar-theme');
@@ -128,26 +179,23 @@ export default class QPatcherExtension extends Extension {
         watchKey(this._settings, 'theme-card-color', () => {
             this._updateDynamicThemeStylesheet();
         });
-        watchKey(this._settings, 'blur-sigma', () => {
-            this._setupOverviewBlur();
-        });
 
         // Видимость элементов панели
         watchKey(this._settings, 'panel-visibility', () => {
-            if (Main.panel) Main.panel.visible = this._settings.get_boolean('panel-visibility');
+            if (Main.panel) Main.panel.visible = getBool('panel-visibility', true);
         });
 
         watchKey(this._settings, 'activities-button', () => {
-            const show = this._settings.get_boolean('activities-button');
+            const show = getBool('activities-button', true);
             if (Main.panel?.statusArea?.activities) Main.panel.statusArea.activities.visible = show;
         });
 
         watchKey(this._settings, 'clock-menu', () => {
-            if (Main.panel?.statusArea?.dateMenu) Main.panel.statusArea.dateMenu.visible = this._settings.get_boolean('clock-menu');
+            if (Main.panel?.statusArea?.dateMenu) Main.panel.statusArea.dateMenu.visible = getBool('clock-menu', true);
         });
 
         watchKey(this._settings, 'accessibility-menu', () => {
-            const show = this._settings.get_boolean('accessibility-menu');
+            const show = getBool('accessibility-menu', true);
             try {
                 this._a11ySettings.set_boolean('always-show-universal-access-status', show);
             } catch (e) {}
@@ -164,7 +212,7 @@ export default class QPatcherExtension extends Extension {
         });
 
         watchKey(this._settings, 'quicksettings-button', () => {
-            const show = this._settings.get_boolean('quicksettings-button');
+            const show = getBool('quicksettings-button', true);
             const qs = Main.panel?.statusArea?.quickSettings;
             if (qs?.container) qs.container.visible = show;
         });
@@ -175,13 +223,13 @@ export default class QPatcherExtension extends Extension {
         // ==========================================
 
         watchKey(this._settings, 'dock-separator-hide', () => {
-            const hide = this._settings.get_boolean('dock-separator-hide');
+            const hide = getBool('dock-separator-hide');
             toggleClass('qpatcher-no-dock-separator', hide);
             this._applyDashToDockSeparatorFix(!hide);
         });
 
         watchKey(this._settings, 'dock-show-apps-hide', () => {
-            const hide = this._settings.get_boolean('dock-show-apps-hide');
+            const hide = getBool('dock-show-apps-hide');
             toggleClass('qpatcher-no-dock-show-apps', hide);
             const dash = Main.overview?.dash || Main.overview?._overview?._controls?._dash;
             if (dash?.showAppsButton) dash.showAppsButton.visible = !hide;
@@ -189,7 +237,7 @@ export default class QPatcherExtension extends Extension {
         });
 
         watchKey(this._settings, 'dock-running-dots-hide', () => {
-            const hide = this._settings.get_boolean('dock-running-dots-hide');
+            const hide = getBool('dock-running-dots-hide');
             toggleClass('qpatcher-no-dock-running-dots', hide);
             const dash = Main.overview?.dash || Main.overview?._overview?._controls?._dash;
             if (dash?._box) {
@@ -201,13 +249,13 @@ export default class QPatcherExtension extends Extension {
         });
 
         watchKey(this._settings, 'dock-tooltips-hide', () => {
-            const hide = this._settings.get_boolean('dock-tooltips-hide');
+            const hide = getBool('dock-tooltips-hide');
             toggleClass('qpatcher-no-dock-tooltips', hide);
             this._syncDashToDockSettings();
         });
 
         watchKey(this._settings, 'dock-notification-badge-hide', () => {
-            const hide = this._settings.get_boolean('dock-notification-badge-hide');
+            const hide = getBool('dock-notification-badge-hide');
             toggleClass('qpatcher-hide-dock-notification-badge', hide);
             this._syncDashToDockSettings();
         });
@@ -253,42 +301,30 @@ export default class QPatcherExtension extends Extension {
         // 3. ОБЗОР (OVERVIEW) & ОКНА
         // ==========================================
 
-        watchKey(this._settings, 'overview-style', () => {
-            this._setupOverviewBlur();
-        });
-
-        watchKey(this._settings, 'overview-opacity', () => {
-            this._setupOverviewBlur();
-        });
-
-        watchKey(this._settings, 'blur-sigma', () => {
-            this._setupOverviewBlur();
-            this._updateDateMenuStyle();
-            this._updateQuickSettingsStyle();
-            this._updateNotificationStyle();
-        });
+        watchKey(this._settings, 'overview-style', () => {});
+        watchKey(this._settings, 'overview-opacity', () => {});
 
         watchKey(this._settings, 'overview-window-close-button-hide', () => {
-            toggleClass('qpatcher-no-window-close', this._settings.get_boolean('overview-window-close-button-hide'));
+            toggleClass('qpatcher-no-window-close', getBool('overview-window-close-button-hide'));
         });
 
         watchKey(this._settings, 'overview-window-icon-hide', () => {
-            toggleClass('qpatcher-no-window-icon', this._settings.get_boolean('overview-window-icon-hide'));
+            toggleClass('qpatcher-no-window-icon', getBool('overview-window-icon-hide'));
         });
 
         watchKey(this._settings, 'overview-window-title-hide', () => {
-            toggleClass('qpatcher-no-window-title', this._settings.get_boolean('overview-window-title-hide'));
+            toggleClass('qpatcher-no-window-title', getBool('overview-window-title-hide'));
         });
 
         watchKey(this._settings, 'overview-search-hide', () => {
-            const hide = this._settings.get_boolean('overview-search-hide');
+            const hide = getBool('overview-search-hide');
             toggleClass('qpatcher-no-overview-search', hide);
             const searchEntry = Main.overview?._overview?._controls?._searchEntry;
             if (searchEntry) searchEntry.visible = !hide;
         });
 
         watchKey(this._settings, 'overview-workspace-switcher-hide', () => {
-            const hide = this._settings.get_boolean('overview-workspace-switcher-hide');
+            const hide = getBool('overview-workspace-switcher-hide');
             toggleClass('qpatcher-no-overview-thumbnails', hide);
             const controls = Main.overview?._overview?._controls;
             if (controls?._thumbnailsBox) controls._thumbnailsBox.visible = !hide;
@@ -308,11 +344,11 @@ export default class QPatcherExtension extends Extension {
         });
 
         watchKey(this._settings, 'notification-close-button-hide', () => {
-            toggleClass('qpatcher-no-notification-close', this._settings.get_boolean('notification-close-button-hide'));
+            toggleClass('qpatcher-no-notification-close', getBool('notification-close-button-hide'));
         });
 
         watchKey(this._settings, 'panel-notification-icon-hide', () => {
-            toggleClass('qpatcher-hide-panel-notification-icon', this._settings.get_boolean('panel-notification-icon-hide'));
+            toggleClass('qpatcher-hide-panel-notification-icon', getBool('panel-notification-icon-hide'));
         });
 
         watchKey(this._settings, 'notification-style', () => this._updateNotificationStyle());
@@ -327,10 +363,10 @@ export default class QPatcherExtension extends Extension {
             const dm = Main.panel?.statusArea?.dateMenu;
             if (!dm) return;
 
-            const hideCalendar = this._settings.get_boolean('datemenu-calendar-hide');
-            const hideWeather = this._settings.get_boolean('datemenu-weather-hide');
-            const hideClocks = this._settings.get_boolean('datemenu-world-clocks-hide');
-            const hideEvents = this._settings.get_boolean('datemenu-events-hide');
+            const hideCalendar = getBool('datemenu-calendar-hide');
+            const hideWeather = getBool('datemenu-weather-hide');
+            const hideClocks = getBool('datemenu-world-clocks-hide');
+            const hideEvents = getBool('datemenu-events-hide');
 
             if (dm._calendar) dm._calendar.visible = !hideCalendar;
             if (dm._date) dm._date.visible = !hideCalendar;
@@ -366,7 +402,7 @@ export default class QPatcherExtension extends Extension {
         watchKey(this._settings, 'datemenu-events-hide', updateDateMenuColumns);
 
         watchKey(this._settings, 'datemenu-compact-empty', () => {
-            const compact = this._settings.get_boolean('datemenu-compact-empty');
+            const compact = getBool('datemenu-compact-empty');
             toggleClass('qpatcher-compact-empty-notifications', compact);
             const placeholder = Main.panel?.statusArea?.dateMenu?._messageList?._placeholder;
             if (placeholder?._label) placeholder._label.visible = !compact;
@@ -390,10 +426,10 @@ export default class QPatcherExtension extends Extension {
                 const box = systemItem?.child;
                 if (!box || !box.get_children) return;
 
-                const hidePower = this._settings.get_boolean('qs-power-hide');
-                const hideScreenshot = this._settings.get_boolean('qs-screenshot-hide');
-                const hideSettings = this._settings.get_boolean('qs-settings-hide');
-                const hideLock = this._settings.get_boolean('qs-lock-hide');
+                const hidePower = getBool('qs-power-hide');
+                const hideScreenshot = getBool('qs-screenshot-hide');
+                const hideSettings = getBool('qs-settings-hide');
+                const hideLock = getBool('qs-lock-hide');
 
                 for (const child of box.get_children()) {
                     const type = child.constructor.name;
@@ -429,7 +465,7 @@ export default class QPatcherExtension extends Extension {
 
         watchKey(this._settings, 'screenshot-show-pointer', () => {
             if (Main.screenshotUI?._showPointerButton) {
-                Main.screenshotUI._showPointerButton.checked = this._settings.get_boolean('screenshot-show-pointer');
+                Main.screenshotUI._showPointerButton.checked = getBool('screenshot-show-pointer');
             }
         });
 
@@ -438,7 +474,7 @@ export default class QPatcherExtension extends Extension {
         // ==========================================
 
         watchKey(this._settings, 'dark-mode', () => {
-            const target = this._settings.get_boolean('dark-mode') ? 'prefer-dark' : 'default';
+            const target = getBool('dark-mode', true) ? 'prefer-dark' : 'default';
             if (this._interfaceSettings.get_string('color-scheme') !== target) {
                 this._interfaceSettings.set_string('color-scheme', target);
             }
@@ -470,28 +506,17 @@ export default class QPatcherExtension extends Extension {
 
         if (Main.overview) {
             this._overviewShowingId = Main.overview.connect('showing', () => {
-                if (this._settings.get_boolean('topbar-transparent-in-overview') && Main.panel) {
+                if (getBool('topbar-transparent-in-overview') && Main.panel) {
                     Main.panel.add_style_class_name('qpatcher-topbar-transparent-in-overview');
-                    const blurEffect = Main.panel.get_effect?.('qpatcher-panel-blur');
-                    if (blurEffect) blurEffect.enabled = false;
                 }
             });
             this._overviewHidingId = Main.overview.connect('hiding', () => {
                 if (Main.panel) {
                     Main.panel.remove_style_class_name('qpatcher-topbar-transparent-in-overview');
-                    const blurEffect = Main.panel.get_effect?.('qpatcher-panel-blur');
-                    if (blurEffect) blurEffect.enabled = true;
                 }
             });
             this._signals.push({ obj: Main.overview, id: this._overviewShowingId });
             this._signals.push({ obj: Main.overview, id: this._overviewHidingId });
-        }
-
-        if (Main.layoutManager) {
-            const monChangedId = Main.layoutManager.connect('monitors-changed', () => {
-                this._setupOverviewBlur();
-            });
-            this._signals.push({ obj: Main.layoutManager, id: monChangedId });
         }
 
         if (global.stage) {
@@ -524,7 +549,6 @@ export default class QPatcherExtension extends Extension {
         updatePanelColor();
         this._updatePanelMonitor();
         this._syncDashToDockSettings();
-        this._setupOverviewBlur();
         this._updateDateMenuStyle();
         this._updateQuickSettingsStyle();
         this._updateNotificationStyle();
@@ -533,7 +557,7 @@ export default class QPatcherExtension extends Extension {
         this._updateDynamicThemeStylesheet();
 
         // Инициализация видимости строки поиска в обзоре
-        const hideSearch = this._settings.get_boolean('overview-search-hide');
+        const hideSearch = getBool('overview-search-hide');
         toggleClass('qpatcher-no-overview-search', hideSearch);
         const searchEntry = Main.overview?._overview?._controls?._searchEntry;
         if (searchEntry) searchEntry.visible = !hideSearch;
@@ -558,7 +582,7 @@ export default class QPatcherExtension extends Extension {
             'purple': '#9141ac',
             'slate': '#5e6f82',
         };
-        const cur = this._interfaceSettings?.get_string('accent-color') || this._settings?.get_string('accent-color') || 'blue';
+        const cur = this._interfaceSettings?.get_string('accent-color') || this._getSettingString('accent-color') || 'blue';
         return accentMap[cur] || '#3584e4';
     }
 
@@ -585,15 +609,15 @@ export default class QPatcherExtension extends Extension {
 
     _updateDynamicThemeStylesheet() {
         try {
-            const themeColor = this._settings?.get_string('theme-color') || '#232326';
-            const customCardColor = this._settings?.get_string('theme-card-color')?.trim();
-            const topbarOpacity = (this._settings?.get_int('topbar-opacity') ?? 100) / 100.0;
-            const notifStyle = this._settings?.get_string('notification-style') || 'theme-grey';
-            const notifOpacity = (this._settings?.get_int('notification-opacity') ?? 100) / 100.0;
-            const menusStyle = this._settings?.get_string('menus-dialogs-style') || 'theme-grey';
+            const themeColor = this._getSettingString('theme-color', '#232326');
+            const customCardColor = this._getSettingString('theme-card-color')?.trim();
+            const topbarOpacity = this._getSettingInt('topbar-opacity', 100) / 100.0;
+            const notifStyle = this._getSettingString('notification-style', 'theme-grey');
+            const notifOpacity = this._getSettingInt('notification-opacity', 100) / 100.0;
+            const menusStyle = this._getSettingString('menus-dialogs-style', 'theme-grey');
             const accentHex = this._getAccentHex();
-            const recolorMenus = this._settings?.get_boolean('recolor-all-menus-and-dialogs');
-            const badgeAccent = this._settings?.get_boolean('dock-notification-badge-accent');
+            const recolorMenus = this._getSettingBool('recolor-all-menus-and-dialogs', true);
+            const badgeAccent = this._getSettingBool('dock-notification-badge-accent', false);
 
             const baseRgb = this._parseHex(themeColor);
             const white = { r: 255, g: 255, b: 255 };
@@ -618,26 +642,15 @@ export default class QPatcherExtension extends Extension {
                 if (recolorMenus || menusStyle === 'theme-grey') {
                     uiGroup.add_style_class_name('qpatcher-recolor-menus');
                     uiGroup.add_style_class_name('qpatcher-menus-theme');
-                    uiGroup.remove_style_class_name('qpatcher-menus-blur');
-                } else if (menusStyle === 'blur') {
-                    uiGroup.add_style_class_name('qpatcher-recolor-menus');
-                    uiGroup.add_style_class_name('qpatcher-menus-blur');
-                    uiGroup.remove_style_class_name('qpatcher-menus-theme');
                 } else {
                     uiGroup.remove_style_class_name('qpatcher-recolor-menus');
                     uiGroup.remove_style_class_name('qpatcher-menus-theme');
-                    uiGroup.remove_style_class_name('qpatcher-menus-blur');
                 }
 
                 if (notifStyle === 'theme-grey') {
                     uiGroup.add_style_class_name('qpatcher-notification-theme');
-                    uiGroup.remove_style_class_name('qpatcher-notification-blur');
-                } else if (notifStyle === 'blur') {
-                    uiGroup.add_style_class_name('qpatcher-notification-blur');
-                    uiGroup.remove_style_class_name('qpatcher-notification-theme');
                 } else {
                     uiGroup.remove_style_class_name('qpatcher-notification-theme');
-                    uiGroup.remove_style_class_name('qpatcher-notification-blur');
                 }
 
                 if (badgeAccent) {
@@ -654,16 +667,11 @@ export default class QPatcherExtension extends Extension {
                     background-color: ${this._hexToRgba(themeColor, topbarOpacity)} !important;
                 }
 
-                #panel.qpatcher-topbar-blur,
-                #panelBox #panel.qpatcher-topbar-blur {
-                    background-color: ${this._hexToRgba(themeColor, Math.min(0.45, topbarOpacity))} !important;
-                }
-
                 .notification-banner,
                 .message-banner,
                 .message-list .message,
                 .unlock-dialog-notifications-container .message {
-                    background-color: ${notifStyle === 'blur' ? this._hexToRgba(themeColor, Math.min(0.65, notifOpacity)) : this._hexToRgba(themeColor, notifOpacity)} !important;
+                    background-color: ${this._hexToRgba(themeColor, notifOpacity)} !important;
                 }
 
                 .qpatcher-badge-accent .notification-badge,
@@ -690,7 +698,7 @@ export default class QPatcherExtension extends Extension {
                 .qpatcher-recolor-menus .app-menu .popup-menu-content,
                 .qpatcher-recolor-menus .modal-dialog,
                 .qpatcher-recolor-menus .quick-toggle-menu {
-                    background-color: ${menusStyle === 'blur' ? this._hexToRgba(themeColor, 0.65) : themeColor} !important;
+                    background-color: ${themeColor} !important;
                     border: 1px solid rgba(255, 255, 255, 0.12) !important;
                 }
 
@@ -903,94 +911,10 @@ export default class QPatcherExtension extends Extension {
 
     _setupOverviewBlur() {
         this._destroyOverviewBlur();
-        const style = this._settings.get_string('overview-style');
-        const opacity = this._settings.get_int('overview-opacity') / 100.0;
         const uiGroup = this._getUiGroup();
-        if (!uiGroup) return;
-
-        if (style !== 'blur') {
+        if (uiGroup) {
             uiGroup.remove_style_class_name('qpatcher-overview-blur-active');
-            return;
         }
-
-        uiGroup.add_style_class_name('qpatcher-overview-blur-active');
-        try {
-            if (!Main.layoutManager?.overviewGroup) return;
-            this._overviewBackgroundGroup = new Meta.BackgroundGroup({
-                name: 'qpatcher-overview-background-group',
-                reactive: false,
-            });
-            this._overviewBackgroundGroup.add_constraint(new Clutter.BindConstraint({
-                source: Main.layoutManager.overviewGroup,
-                coordinate: Clutter.BindCoordinate.ALL,
-            }));
-            this._overviewBackgroundGroup.opacity = Math.round(opacity * 255);
-            this._overviewBackgroundManagers = [];
-
-            const radius = this._settings.get_int('blur-sigma') || 30;
-            const monitors = Main.layoutManager.monitors || [];
-            for (let i = 0; i < monitors.length; i++) {
-                const mon = monitors[i];
-                const monActor = new St.Widget({
-                    name: `qpatcher-overview-monitor-${i}`,
-                    x: mon.x,
-                    y: mon.y,
-                    width: mon.width,
-                    height: mon.height,
-                    reactive: false,
-                });
-
-                const source = new St.Widget({
-                    name: `qpatcher-overview-source-${i}`,
-                    visible: false,
-                    reactive: false,
-                });
-                source.add_constraint(new Clutter.BindConstraint({
-                    source: monActor,
-                    coordinate: Clutter.BindCoordinate.SIZE,
-                }));
-                monActor.add_child(source);
-
-                const clone = new Clutter.Clone({
-                    source: source,
-                    reactive: false,
-                });
-                clone.add_constraint(new Clutter.BindConstraint({
-                    source: monActor,
-                    coordinate: Clutter.BindCoordinate.SIZE,
-                }));
-                monActor.add_child(clone);
-
-                const bgManager = new Background.BackgroundManager({
-                    container: source,
-                    monitorIndex: i,
-                    controlPosition: false,
-                });
-                const effect = new Shell.BlurEffect({
-                    brightness: 0.85,
-                    radius: radius,
-                    mode: Shell.BlurMode.ACTOR,
-                });
-                effect.name = `qpatcher-overview-blur-${i}`;
-                clone.add_effect(effect);
-
-                this._overviewBackgroundGroup.add_child(monActor);
-                this._overviewBackgroundManagers.push(bgManager);
-            }
-
-            Main.layoutManager.overviewGroup.insert_child_at_index(this._overviewBackgroundGroup, 0);
-            this._reorderingOverview = false;
-            this._overviewChildAddedId = Main.layoutManager.overviewGroup.connect('child-added', (_, child) => {
-                if (this._reorderingOverview) return;
-                if (child !== this._overviewBackgroundGroup && this._overviewBackgroundGroup) {
-                    this._reorderingOverview = true;
-                    try {
-                        Main.layoutManager.overviewGroup.set_child_at_index(this._overviewBackgroundGroup, 0);
-                    } catch (e) {}
-                    this._reorderingOverview = false;
-                }
-            });
-        } catch (e) {}
     }
 
     _destroyOverviewBlur() {
@@ -1018,20 +942,16 @@ export default class QPatcherExtension extends Extension {
 
     _updateDateMenuStyle() {
         try {
-            const style = this._settings.get_string('datemenu-style');
-            const opacity = this._settings.get_int('datemenu-opacity') / 100.0;
-            const color = this._settings.get_string('theme-color') || '#232326';
+            const style = this._getSettingString('datemenu-style', 'default');
+            const opacity = this._getSettingInt('datemenu-opacity', 100) / 100.0;
+            const color = this._getSettingString('theme-color', '#232326');
             const dateMenu = Main.panel?.statusArea?.dateMenu;
             const menuBox = dateMenu?.menu?.box;
             if (!menuBox) return;
 
             menuBox.remove_style_class_name('qpatcher-datemenu-theme');
-            menuBox.remove_style_class_name('qpatcher-datemenu-blur');
-            if (menuBox.remove_effect_by_name) {
-                menuBox.remove_effect_by_name('qpatcher-datemenu-blur');
-            }
 
-            if (style === 'theme-grey' || style === 'blur') {
+            if (style === 'theme-grey') {
                 menuBox.add_style_class_name('qpatcher-datemenu-theme');
                 menuBox.set_style(`background-color: ${this._hexToRgba(color, opacity)} !important;`);
             } else {
@@ -1049,20 +969,16 @@ export default class QPatcherExtension extends Extension {
 
     _updateQuickSettingsStyle() {
         try {
-            const style = this._settings.get_string('quicksettings-style');
-            const opacity = this._settings.get_int('quicksettings-opacity') / 100.0;
-            const color = this._settings.get_string('theme-color') || '#232326';
+            const style = this._getSettingString('quicksettings-style', 'default');
+            const opacity = this._getSettingInt('quicksettings-opacity', 100) / 100.0;
+            const color = this._getSettingString('theme-color', '#232326');
             const qs = Main.panel?.statusArea?.quickSettings;
             const menuBox = qs?.menu?.box;
             if (!menuBox) return;
 
             menuBox.remove_style_class_name('qpatcher-qs-theme');
-            menuBox.remove_style_class_name('qpatcher-qs-blur');
-            if (menuBox.remove_effect_by_name) {
-                menuBox.remove_effect_by_name('qpatcher-qs-blur');
-            }
 
-            if (style === 'theme-grey' || style === 'blur') {
+            if (style === 'theme-grey') {
                 menuBox.add_style_class_name('qpatcher-qs-theme');
                 menuBox.set_style(`background-color: ${this._hexToRgba(color, opacity)} !important;`);
             } else {
@@ -1080,9 +996,9 @@ export default class QPatcherExtension extends Extension {
 
     _updateNotificationStyle() {
         try {
-            const style = this._settings.get_string('notification-style');
-            const opacity = this._settings.get_int('notification-opacity') / 100.0;
-            const themeColor = this._settings.get_string('theme-color') || '#232326';
+            const style = this._getSettingString('notification-style', 'theme-grey');
+            const opacity = this._getSettingInt('notification-opacity', 100) / 100.0;
+            const themeColor = this._getSettingString('theme-color', '#232326');
 
             if (Main.messageTray && !this._messageTrayHooked) {
                 this._messageTrayHooked = true;
@@ -1111,10 +1027,8 @@ export default class QPatcherExtension extends Extension {
 
             for (const banner of banners) {
                 banner.remove_style_class_name('qpatcher-notification-theme');
-                banner.remove_style_class_name('qpatcher-notification-blur');
-                if (banner.remove_effect_by_name) banner.remove_effect_by_name('qpatcher-banner-blur');
 
-                if (style === 'theme-grey' || style === 'blur') {
+                if (style === 'theme-grey') {
                     banner.add_style_class_name('qpatcher-notification-theme');
                     banner.set_style(`background-color: ${this._hexToRgba(themeColor, opacity)} !important;`);
                 } else {
@@ -1126,20 +1040,19 @@ export default class QPatcherExtension extends Extension {
 
     _syncDashToDockSettings() {
         try {
-            const visibleOnDesktop = this._settings.get_boolean('dock-always-visible');
-            const intellihide = this._settings.get_boolean('dock-intellihide');
-            const hideTooltips = this._settings.get_boolean('dock-tooltips-hide');
-            const hideBadges = this._settings.get_boolean('dock-notification-badge-hide');
-            const hideShowApps = this._settings.get_boolean('dock-show-apps-hide');
-            const showMounts = this._settings.get_boolean('dock-show-mounts');
-            const runningBar = this._settings.get_boolean('dock-running-indicator-bar');
-            const hideDots = this._settings.get_boolean('dock-running-dots-hide');
-            const iconSize = this._settings.get_int('dock-icon-size');
-            const style = this._settings.get_string('dock-style');
-            const opacity = this._settings.get_int('dock-opacity') / 100.0;
-            const themeColor = this._settings.get_string('theme-color') || '#232326';
+            const visibleOnDesktop = this._getSettingBool('dock-always-visible');
+            const intellihide = this._getSettingBool('dock-intellihide');
+            const hideTooltips = this._getSettingBool('dock-tooltips-hide');
+            const hideBadges = this._getSettingBool('dock-notification-badge-hide');
+            const hideShowApps = this._getSettingBool('dock-show-apps-hide');
+            const showMounts = this._getSettingBool('dock-show-mounts');
+            const runningBar = this._getSettingBool('dock-running-indicator-bar');
+            const hideDots = this._getSettingBool('dock-running-dots-hide');
+            const iconSize = this._getSettingInt('dock-icon-size', 48);
+            const style = this._getSettingString('dock-style', 'theme-grey');
+            const opacity = this._getSettingInt('dock-opacity', 100) / 100.0;
+            const themeColor = this._getSettingString('theme-color', '#232326');
             const accentColor = this._getAccentHex();
-            const blurRadius = this._settings.get_int('blur-sigma') || 30;
 
             if (visibleOnDesktop) {
                 if (!this._dockManager) {
@@ -1195,7 +1108,7 @@ export default class QPatcherExtension extends Extension {
                 d2d.set_boolean('custom-theme-customize-running-dots', false);
             }
 
-            if (style === 'theme-grey' || style === 'blur') {
+            if (style === 'theme-grey') {
                 d2d.set_boolean('apply-custom-theme', true);
                 d2d.set_boolean('custom-background-color', true);
                 d2d.set_string('background-color', themeColor);
@@ -1230,7 +1143,7 @@ export default class QPatcherExtension extends Extension {
                 }
             }
 
-            const enableMagnify = this._settings.get_boolean('dock-magnification');
+            const enableMagnify = this._getSettingBool('dock-magnification');
 
             for (const dash of dashes) {
                 if (dash.clip_to_allocation !== undefined) dash.clip_to_allocation = false;
@@ -1250,7 +1163,7 @@ export default class QPatcherExtension extends Extension {
                     if (!icon._qpatcherConnected) {
                         icon._qpatcherConnected = true;
                         icon.connect('notify::hover', () => {
-                            if (!this._settings.get_boolean('dock-magnification')) return;
+                            if (!this._getSettingBool('dock-magnification')) return;
                             if (icon.hover) {
                                 icon.ease({
                                     scale_x: 1.15,
@@ -1319,7 +1232,7 @@ export default class QPatcherExtension extends Extension {
                 grid.connect('actor-removed', reapply);
             }
 
-            const enabled = this._settings.get_boolean('quicksettings-full-width-toggle');
+            const enabled = this._getSettingBool('quicksettings-full-width-toggle');
             const layout = grid.layout_manager;
             if (!layout) return;
 
@@ -1357,7 +1270,7 @@ export default class QPatcherExtension extends Extension {
 
     _updatePanelMonitor() {
         try {
-            const targetMonitor = this._settings.get_int('topbar-monitor');
+            const targetMonitor = this._getSettingInt('topbar-monitor');
             const panelBox = Main.layoutManager.panelBox;
             if (!panelBox) return;
 
@@ -1375,8 +1288,8 @@ export default class QPatcherExtension extends Extension {
             const tray = Main.messageTray;
             if (!tray || !tray._bannerBin) return;
 
-            const targetMonitor = this._settings.get_int('notification-monitor');
-            const hAlign = this._settings.get_string('notification-horizontal-alignment');
+            const targetMonitor = this._getSettingInt('notification-monitor');
+            const hAlign = this._getSettingString('notification-horizontal-alignment', 'center');
 
             // 1. Позиционирование на мониторе
             const monIndex = targetMonitor === 0 ? (Main.layoutManager.primaryIndex ?? 0) : targetMonitor - 1;
@@ -1441,7 +1354,7 @@ export default class QPatcherExtension extends Extension {
             let patching = false;
             const patchLabels = () => {
                 if (patching) return;
-                if (!this._settings?.get_boolean('keyboard-uppercase')) return;
+                if (!this._getSettingBool('keyboard-uppercase')) return;
                 patching = true;
                 try {
                     const updateActorText = (actor) => {
@@ -1538,7 +1451,7 @@ export default class QPatcherExtension extends Extension {
     }
 
     _updateKeyboardLayoutText() {
-        if (!this._settings?.get_boolean('keyboard-uppercase')) return;
+        if (!this._getSettingBool('keyboard-uppercase')) return;
         try {
             const keyboard = Main.panel?.statusArea?.keyboard;
             if (!keyboard) return;
@@ -1590,21 +1503,21 @@ export default class QPatcherExtension extends Extension {
                 const self = this;
                 proto.showOverlay = function(animate) {
                     if (self._origShowOverlay) self._origShowOverlay.call(this, animate);
-                    if (self._settings?.get_boolean('overview-window-title-hide') && this._title) {
+                    if (self._getSettingBool('overview-window-title-hide') && this._title) {
                         this._title.visible = false;
                         this._title.opacity = 0;
                     }
                 };
 
                 proto._windowCanClose = function() {
-                    if (self._settings?.get_boolean('overview-window-close-button-hide')) {
+                    if (self._getSettingBool('overview-window-close-button-hide')) {
                         return false;
                     }
                     return self._origWindowCanClose ? self._origWindowCanClose.apply(this, arguments) : true;
                 };
 
                 proto._getCaption = function() {
-                    if (self._settings?.get_boolean('overview-window-title-hide')) {
+                    if (self._getSettingBool('overview-window-title-hide')) {
                         if (this._title) {
                             this._title.visible = false;
                             this._title.opacity = 0;
@@ -1619,7 +1532,7 @@ export default class QPatcherExtension extends Extension {
                     if (self._origUpdateIconScale) {
                         self._origUpdateIconScale.apply(this, arguments);
                     }
-                    if (self._settings?.get_boolean('overview-window-icon-hide') && this._icon) {
+                    if (self._getSettingBool('overview-window-icon-hide') && this._icon) {
                         this._icon.opacity = 0;
                         this._icon.visible = false;
                     }
@@ -1632,7 +1545,7 @@ export default class QPatcherExtension extends Extension {
                     this._origShowLabel = proto.showLabel;
                     const self = this;
                     proto.showLabel = function() {
-                        if (self._settings?.get_boolean('dock-tooltips-hide')) {
+                        if (self._getSettingBool('dock-tooltips-hide')) {
                             return;
                         }
                         return self._origShowLabel.apply(this, arguments);
@@ -1676,7 +1589,7 @@ export default class QPatcherExtension extends Extension {
                 this._origScreenShieldActivate = Main.screenShield.activate;
                 const self = this;
                 Main.screenShield.activate = function(animate) {
-                    if (!self._settings?.get_boolean('lockscreen-prevent-blank')) {
+                    if (!self._getSettingBool('lockscreen-prevent-blank')) {
                         return self._origScreenShieldActivate.call(this, animate);
                     }
 
@@ -1766,14 +1679,11 @@ export default class QPatcherExtension extends Extension {
             'qpatcher-badge-accent',
             'qpatcher-recolor-menus',
             'qpatcher-menus-theme',
-            'qpatcher-menus-blur',
             'qpatcher-notification-theme',
-            'qpatcher-notification-blur',
             'qpatcher-no-dock-separator',
             'qpatcher-no-dock-show-apps',
             'qpatcher-no-dock-running-dots',
             'qpatcher-no-dock-tooltips',
-            'qpatcher-overview-blur-active',
             'qpatcher-no-window-close',
             'qpatcher-no-window-icon',
             'qpatcher-no-window-title',
@@ -1804,10 +1714,7 @@ export default class QPatcherExtension extends Extension {
             Main.panel.set_style('');
             Main.panel.remove_style_class_name('qpatcher-topbar-transparent');
             Main.panel.remove_style_class_name('qpatcher-topbar-theme');
-            Main.panel.remove_style_class_name('qpatcher-topbar-blur');
             Main.panel.remove_style_class_name('qpatcher-topbar-transparent-in-overview');
-            Main.panel.remove_style_class_name('qpatcher-blurred');
-            if (Main.panel.remove_effect_by_name) Main.panel.remove_effect_by_name('qpatcher-panel-blur');
             if (Main.panel.statusArea?.quickSettings?.container) {
                 Main.panel.statusArea.quickSettings.container.visible = true;
             }
@@ -1824,8 +1731,6 @@ export default class QPatcherExtension extends Extension {
             if (dateMenu.menu?.box) {
                 dateMenu.menu.box.set_style(null);
                 dateMenu.menu.box.remove_style_class_name('qpatcher-datemenu-theme');
-                dateMenu.menu.box.remove_style_class_name('qpatcher-datemenu-blur');
-                if (dateMenu.menu.box.remove_effect_by_name) dateMenu.menu.box.remove_effect_by_name('qpatcher-datemenu-blur');
             }
         }
 
@@ -1841,8 +1746,6 @@ export default class QPatcherExtension extends Extension {
             if (qs.menu?.box) {
                 qs.menu.box.set_style(null);
                 qs.menu.box.remove_style_class_name('qpatcher-qs-theme');
-                qs.menu.box.remove_style_class_name('qpatcher-qs-blur');
-                if (qs.menu.box.remove_effect_by_name) qs.menu.box.remove_effect_by_name('qpatcher-qs-blur');
             }
         }
 
@@ -1894,7 +1797,7 @@ export default class QPatcherExtension extends Extension {
             Main.screenshotUI.open = async function(...args) {
                 const res = await self._origScreenshotOpen.apply(this, args);
                 try {
-                    const showPointer = self._settings?.get_boolean('screenshot-show-pointer');
+                    const showPointer = self._getSettingBool('screenshot-show-pointer');
                     if (this._showPointerButton && this._showPointerButton.checked !== showPointer) {
                         this._showPointerButton.checked = showPointer;
                     }
@@ -1906,9 +1809,7 @@ export default class QPatcherExtension extends Extension {
         if (Main.screenshotUI._showPointerButton && !Main.screenshotUI._showPointerButton._qpatcherPointerHooked) {
             Main.screenshotUI._showPointerButton._qpatcherPointerHooked = true;
             Main.screenshotUI._showPointerButton.connect('notify::checked', () => {
-                if (this._settings) {
-                    this._settings.set_boolean('screenshot-show-pointer', Main.screenshotUI._showPointerButton.checked);
-                }
+                this._setSettingBool('screenshot-show-pointer', Main.screenshotUI._showPointerButton.checked);
             });
         }
 
@@ -1985,7 +1886,7 @@ export default class QPatcherExtension extends Extension {
                 soundPlayer.play_from_file = function(file, event, cancellable) {
                     const filePath = file?.get_path ? file.get_path() : '';
                     if (filePath && filePath.endsWith('screen-capture.oga')) {
-                        const soundMode = self._settings?.get_string('screenshot-sound') || 'bubble';
+                        const soundMode = self._getSettingString('screenshot-sound', 'bubble');
                         if (soundMode === 'disabled') {
                             return;
                         } else if (soundMode === 'bubble') {
@@ -2011,7 +1912,7 @@ export default class QPatcherExtension extends Extension {
             });
 
             this._dragEndedSignalId = areaSelector.connect('drag-ended', () => {
-                if (!this._settings?.get_boolean('screenshot-quick-capture')) return;
+                if (!this._getSettingBool('screenshot-quick-capture')) return;
                 if (!Main.screenshotUI?.visible || !Main.screenshotUI?._selectionButton?.checked) return;
 
                 const [x, y, w, h] = areaSelector.getGeometry();
@@ -2027,7 +1928,7 @@ export default class QPatcherExtension extends Extension {
         }
 
         const updatePanelVisibility = () => {
-            const hidePanel = this._settings?.get_boolean('screenshot-hide-panel') ?? false;
+            const hidePanel = this._getSettingBool('screenshot-hide-panel', false);
             if (Main.screenshotUI) {
                 if (hidePanel) {
                     Main.screenshotUI.add_style_class_name('qpatcher-screenshot-hide-panel');
@@ -2041,7 +1942,9 @@ export default class QPatcherExtension extends Extension {
             }
         };
 
-        this._screenshotHidePanelSignalId = this._settings.connect('changed::screenshot-hide-panel', updatePanelVisibility);
+        if (this._settings?.settings_schema?.has_key('screenshot-hide-panel')) {
+            this._screenshotHidePanelSignalId = this._settings.connect('changed::screenshot-hide-panel', updatePanelVisibility);
+        }
         updatePanelVisibility();
 
         this._screenshotUiOpenSignalId = Main.screenshotUI.connect('notify::visible', () => {
@@ -2049,7 +1952,7 @@ export default class QPatcherExtension extends Extension {
                 updatePanelVisibility();
 
                 // Сброс области выделения по умолчанию (начинаем с чистого экрана)
-                if (this._settings?.get_boolean('screenshot-clear-selection')) {
+                if (this._getSettingBool('screenshot-clear-selection', true)) {
                     const areaSelector = Main.screenshotUI._areaSelector;
                     if (areaSelector) {
                         areaSelector._startX = 0;
@@ -2111,7 +2014,7 @@ export default class QPatcherExtension extends Extension {
             cursor = { texture: null, x: 0, y: 0, scale: 1 };
         }
 
-        const soundMode = this._settings?.get_string('screenshot-sound') || 'bubble';
+        const soundMode = this._getSettingString('screenshot-sound', 'bubble');
         if (soundMode === 'bubble') {
             const bubbleFile = Gio.File.new_for_path('/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga');
             global.display.get_sound_player().play_from_file(bubbleFile, 'Screenshot taken', null);
@@ -2139,12 +2042,12 @@ export default class QPatcherExtension extends Extension {
         const time = GLib.DateTime.new_now_local();
         let file = null;
 
-        const clipboardOnly = this._settings?.get_boolean('screenshot-clipboard-only') ?? false;
-        const filenameFormat = this._settings?.get_string('screenshot-filename-format') || 'date';
+        const clipboardOnly = this._getSettingBool('screenshot-clipboard-only', false);
+        const filenameFormat = this._getSettingString('screenshot-filename-format', 'date');
 
         if (!clipboardOnly) {
             const picturesDir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) || GLib.get_home_dir();
-            const saveLocation = this._settings?.get_string('screenshot-save-location') || 'subfolder';
+            const saveLocation = this._getSettingString('screenshot-save-location', 'subfolder');
 
             let dir;
             if (saveLocation === 'pictures') {
@@ -2307,7 +2210,9 @@ export default class QPatcherExtension extends Extension {
                 this._screenshotUiOpenSignalId = null;
             }
             if (this._screenshotHidePanelSignalId) {
-                this._settings?.disconnect(this._screenshotHidePanelSignalId);
+                try {
+                    this._settings?.disconnect(this._screenshotHidePanelSignalId);
+                } catch (e) {}
                 this._screenshotHidePanelSignalId = null;
             }
             Main.screenshotUI.remove_style_class_name('qpatcher-screenshot-hide-panel');

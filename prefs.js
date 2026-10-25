@@ -93,15 +93,12 @@ export default class QPatcherPreferences extends ExtensionPreferences {
             return row;
         };
 
-        const addStyleCombo = (group, title, schemaKey, allowBlur = false) => {
+        const addStyleCombo = (group, title, schemaKey) => {
             const model = new Gtk.StringList();
             model.append(_('По умолчанию (GNOME Default)'));
             model.append(_('В цвет темы / Прозрачность'));
-            if (allowBlur) {
-                model.append(_('Размытие (Blur)'));
-            }
 
-            const styles = allowBlur ? ['default', 'theme-grey', 'blur'] : ['default', 'theme-grey'];
+            const styles = ['default', 'theme-grey'];
             const current = settings.get_string(schemaKey);
             const row = new Adw.ComboRow({
                 title: _(title),
@@ -252,22 +249,12 @@ export default class QPatcherPreferences extends ExtensionPreferences {
 
         const overviewStyleGroup = new Adw.PreferencesGroup({
             title: _('Фон режима обзора (Overview)'),
-            description: _('Настоящее размытие обоев рабочего стола без серой подложки'),
+            description: _('Настройка фона режима обзора'),
         });
         pageOverview.add(overviewStyleGroup);
 
-        addStyleCombo(overviewStyleGroup, 'Стиль фона обзора', 'overview-style', true);
+        addStyleCombo(overviewStyleGroup, 'Стиль фона обзора', 'overview-style');
         addOpacitySlider(overviewStyleGroup, 'Прозрачность фона обзора', 'overview-opacity');
-
-        const sigmaRow = new Adw.SpinRow({
-            title: _('Интенсивность размытия (Sigma)'),
-            subtitle: _('Радиус размытия обоев в режиме обзора (от 0 до 100)'),
-            adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 5, page_increment: 10, value: settings.get_int('blur-sigma') }),
-        });
-        sigmaRow.connect('notify::value', () => {
-            settings.set_int('blur-sigma', sigmaRow.value);
-        });
-        overviewStyleGroup.add(sigmaRow);
 
         const overviewElementsGroup = new Adw.PreferencesGroup({
             title: _('Элементы режима обзора и окон'),
@@ -511,7 +498,7 @@ export default class QPatcherPreferences extends ExtensionPreferences {
 
 
         // ==========================================
-        // 8. ВКЛАДКА: ПРОЧЕЕ (SYSTEM, THEME & BLUR)
+        // 8. ВКЛАДКА: ПРОЧЕЕ (SYSTEM & THEME)
         // ==========================================
         const pageOther = new Adw.PreferencesPage({
             title: _('Прочее'),

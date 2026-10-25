@@ -172,7 +172,7 @@
     <key name="overview-style" type="s">
       <default>'default'</default>
       <summary>Overview Style</summary>
-      <description>'default', 'theme-grey', 'blur'</description>
+      <description>'default', 'theme-grey'</description>
     </key>
 
     <key name="overview-opacity" type="i">
@@ -351,7 +351,7 @@
 
 
     <!-- ========================================== -->
-    <!-- 7. ПРОЧЕЕ (SYSTEM, THEME & BLUR)           -->
+    <!-- 7. ПРОЧЕЕ (SYSTEM & THEME)                  -->
     <!-- ========================================== -->
     <key name="theme-color" type="s">
       <default>'#232326'</default>
@@ -363,18 +363,6 @@
       <default>''</default>
       <summary>Sub-element and Card Color</summary>
       <description>Custom color for inner cards, buttons, and popover podlozhki. Leave empty for automatic harmonization with theme-color.</description>
-    </key>
-
-    <key name="blur-sigma" type="i">
-      <default>30</default>
-      <summary>Overview Blur Sigma</summary>
-      <description>Overview blur radius / strength (0 to 100)</description>
-    </key>
-
-    <key name="blur-mode" type="s">
-      <default>'static'</default>
-      <summary>Global Blur Mode</summary>
-      <description>'static' or 'dynamic'</description>
     </key>
 
     <key name="accent-color" type="s">

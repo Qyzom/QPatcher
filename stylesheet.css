@@ -19,8 +19,7 @@
     box-shadow: none !important;
 }
 
-#panel.qpatcher-topbar-theme,
-#panel.qpatcher-topbar-blur {
+#panel.qpatcher-topbar-theme {
     border: none !important;
     box-shadow: none !important;
 }
@@ -55,10 +54,7 @@
     padding: 0 !important;
 }
 
-.qpatcher-blurred {
-    backdrop-filter: blur(25px) !important;
-    -webkit-backdrop-filter: blur(25px) !important;
-}
+
 
 
 /* =================================================== */
@@ -199,14 +195,7 @@
 /* 3. ОБЗОР (OVERVIEW)                                 */
 /* =================================================== */
 
-/* Реальное размытие фона: делаем однотонный темно-серый фон овервью прозрачным, открывая размытые растянутые обои */
-.qpatcher-overview-blur-active #overviewGroup {
-    background-color: transparent !important;
-}
 
-.qpatcher-overview-blur-active .workspace-animation {
-    background-color: transparent !important;
-}
 
 .qpatcher-no-window-close .window-close {
     display: none !important;
@@ -279,15 +268,7 @@
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
-.qpatcher-notification-blur .notification-banner,
-.qpatcher-notification-blur .message,
-.qpatcher-notification-blur .message-list .message,
-.notification-banner.qpatcher-notification-blur,
-.message.qpatcher-notification-blur {
-    background-color: var(--qpatcher-theme-color-blur, rgba(35, 35, 38, 0.55)) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35) !important;
-}
+
 
 
 /* =================================================== */
@@ -424,25 +405,13 @@
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
-.qpatcher-menus-blur .popup-menu-content,
-.qpatcher-menus-blur .candidate-popup-content,
-.qpatcher-menus-blur .app-menu .popup-menu-content,
-.qpatcher-menus-blur .modal-dialog,
-.qpatcher-menus-blur .quick-toggle-menu {
-    background-color: var(--qpatcher-theme-color-blur, rgba(35, 35, 38, 0.65)) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45) !important;
-}
-
 .qpatcher-recolor-menus .popup-sub-menu .popup-menu-item,
-.qpatcher-menus-theme .popup-sub-menu .popup-menu-item,
-.qpatcher-menus-blur .popup-sub-menu .popup-menu-item {
+.qpatcher-menus-theme .popup-sub-menu .popup-menu-item {
     background-color: transparent !important;
 }
 
 .qpatcher-recolor-menus .modal-dialog,
-.qpatcher-menus-theme .modal-dialog,
-.qpatcher-menus-blur .modal-dialog {
+.qpatcher-menus-theme .modal-dialog {
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45) !important;
 }
 
