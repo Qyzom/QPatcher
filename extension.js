@@ -928,7 +928,7 @@ export default class QPatcherExtension extends Extension {
             }
 
             if (style === 'theme-grey' || style === 'blur') {
-                d2d.set_boolean('apply-custom-theme', false);
+                d2d.set_boolean('apply-custom-theme', true);
                 d2d.set_boolean('custom-background-color', true);
                 d2d.set_string('background-color', themeColor);
                 d2d.set_double('background-opacity', opacity);

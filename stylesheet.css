@@ -78,6 +78,19 @@
 }
 
 
+/* Аккуратный круглый бейдж уведомлений на иконках */
+.notification-badge {
+    color: #ffffff !important;
+    background-color: #e01b24 !important;
+    padding: 1px 6px !important;
+    border-radius: 9999px !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    text-align: center !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45) !important;
+    margin: 2px !important;
+}
+
 /* Подсветка бейджа уведомлений акцентным цветом */
 .qpatcher-badge-accent .notification-badge,
 .qpatcher-badge-accent #dashtodockContainer .notification-badge,

@@ -278,8 +278,8 @@ export class ThemeManager {
         this._dash._background.set_style(null);
         this._transparency.disable();
 
-        // If built-in theme is enabled do nothing else
-        if (settings.applyCustomTheme)
+        // If built-in theme is enabled and custom background color is not requested, do nothing else
+        if (settings.applyCustomTheme && !settings.customBackgroundColor)
             return;
 
         let newStyle = '';
