@@ -125,6 +125,9 @@ export default class QPatcherExtension extends Extension {
             this._updateDynamicThemeStylesheet();
             this._syncDashToDockSettings();
         });
+        watchKey(this._settings, 'theme-card-color', () => {
+            this._updateDynamicThemeStylesheet();
+        });
         watchKey(this._settings, 'blur-sigma', () => {
             this._setupOverviewBlur();
         });
@@ -402,6 +405,14 @@ export default class QPatcherExtension extends Extension {
             } catch (e) {}
         };
 
+        const qs = Main.panel?.statusArea?.quickSettings;
+        if (qs?.menu && !qs.menu._qpatcherButtonsHooked) {
+            qs.menu._qpatcherButtonsHooked = true;
+            qs.menu.connect('open-state-changed', (menu, isOpen) => {
+                if (isOpen) updateQuickSettingsButtons();
+            });
+        }
+
         watchKey(this._settings, 'qs-power-hide', updateQuickSettingsButtons);
         watchKey(this._settings, 'qs-screenshot-hide', updateQuickSettingsButtons);
         watchKey(this._settings, 'qs-settings-hide', updateQuickSettingsButtons);
@@ -415,6 +426,12 @@ export default class QPatcherExtension extends Extension {
         watchKey(this._settings, 'quicksettings-style', () => this._updateQuickSettingsStyle());
         watchKey(this._settings, 'quicksettings-opacity', () => this._updateQuickSettingsStyle());
 
+
+        watchKey(this._settings, 'screenshot-show-pointer', () => {
+            if (Main.screenshotUI?._showPointerButton) {
+                Main.screenshotUI._showPointerButton.checked = this._settings.get_boolean('screenshot-show-pointer');
+            }
+        });
 
         // ==========================================
         // 7. ПРОЧЕЕ (SYSTEM & ACCENT)
@@ -539,9 +556,31 @@ export default class QPatcherExtension extends Extension {
         return accentMap[cur] || '#3584e4';
     }
 
+    _parseHex(hex) {
+        if (!hex || typeof hex !== 'string') return { r: 35, g: 35, b: 38 };
+        let h = hex.replace('#', '').trim();
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        if (h.length !== 6) return { r: 35, g: 35, b: 38 };
+        return {
+            r: parseInt(h.substring(0, 2), 16) || 0,
+            g: parseInt(h.substring(2, 4), 16) || 0,
+            b: parseInt(h.substring(4, 6), 16) || 0,
+        };
+    }
+
+    _mixColors(c1, c2, weight) {
+        const w2 = Math.max(0, Math.min(1, weight));
+        const w1 = 1 - w2;
+        const r = Math.round(c1.r * w1 + c2.r * w2);
+        const g = Math.round(c1.g * w1 + c2.g * w2);
+        const b = Math.round(c1.b * w1 + c2.b * w2);
+        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    }
+
     _updateDynamicThemeStylesheet() {
         try {
             const themeColor = this._settings?.get_string('theme-color') || '#232326';
+            const customCardColor = this._settings?.get_string('theme-card-color')?.trim();
             const topbarOpacity = (this._settings?.get_int('topbar-opacity') ?? 100) / 100.0;
             const notifStyle = this._settings?.get_string('notification-style') || 'theme-grey';
             const notifOpacity = (this._settings?.get_int('notification-opacity') ?? 100) / 100.0;
@@ -549,6 +588,25 @@ export default class QPatcherExtension extends Extension {
             const accentHex = this._getAccentHex();
             const recolorMenus = this._settings?.get_boolean('recolor-all-menus-and-dialogs');
             const badgeAccent = this._settings?.get_boolean('dock-notification-badge-accent');
+
+            const baseRgb = this._parseHex(themeColor);
+            const white = { r: 255, g: 255, b: 255 };
+            const black = { r: 0, g: 0, b: 0 };
+
+            let cardBg, cardHoverBg, cardActiveBg, sliderTroughBg;
+            if (customCardColor && customCardColor.startsWith('#') && (customCardColor.length === 4 || customCardColor.length === 7)) {
+                const cardRgb = this._parseHex(customCardColor);
+                cardBg = customCardColor;
+                cardHoverBg = this._mixColors(cardRgb, white, 0.08);
+                cardActiveBg = this._mixColors(cardRgb, white, 0.16);
+                sliderTroughBg = this._mixColors(cardRgb, black, 0.25);
+            } else {
+                cardBg = this._mixColors(baseRgb, white, 0.09);
+                cardHoverBg = this._mixColors(baseRgb, white, 0.16);
+                cardActiveBg = this._mixColors(baseRgb, white, 0.24);
+                sliderTroughBg = this._mixColors(baseRgb, black, 0.25);
+            }
+
             const uiGroup = this._getUiGroup();
             if (uiGroup) {
                 if (recolorMenus || menusStyle === 'theme-grey') {
@@ -627,6 +685,197 @@ export default class QPatcherExtension extends Extension {
                 .qpatcher-recolor-menus .modal-dialog,
                 .qpatcher-recolor-menus .quick-toggle-menu {
                     background-color: ${menusStyle === 'blur' ? this._hexToRgba(themeColor, 0.65) : themeColor} !important;
+                    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                }
+
+                /* ======================================================== */
+                /* INNER PODLOZHKI (CARDS, BUTTONS, TOGGLES, HEADERS)      */
+                /* ======================================================== */
+
+                /* Quick Settings Toggles */
+                .qpatcher-recolor-menus .quick-toggle,
+                .qpatcher-menus-theme .quick-toggle,
+                .qpatcher-qs-theme .quick-toggle,
+                .quick-settings .quick-toggle {
+                    background-color: ${cardBg} !important;
+                }
+
+                .qpatcher-recolor-menus .quick-toggle:hover,
+                .qpatcher-menus-theme .quick-toggle:hover,
+                .qpatcher-qs-theme .quick-toggle:hover,
+                .quick-settings .quick-toggle:hover {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                .qpatcher-recolor-menus .quick-toggle:active,
+                .qpatcher-menus-theme .quick-toggle:active,
+                .qpatcher-qs-theme .quick-toggle:active,
+                .quick-settings .quick-toggle:active {
+                    background-color: ${cardActiveBg} !important;
+                }
+
+                .qpatcher-recolor-menus .quick-toggle:checked,
+                .qpatcher-menus-theme .quick-toggle:checked,
+                .qpatcher-qs-theme .quick-toggle:checked,
+                .quick-toggle:checked {
+                    background-color: ${accentHex} !important;
+                    color: #ffffff !important;
+                }
+
+                .qpatcher-recolor-menus .quick-toggle-has-menu .quick-toggle-menu-button,
+                .qpatcher-menus-theme .quick-toggle-has-menu .quick-toggle-menu-button,
+                .qpatcher-qs-theme .quick-toggle-has-menu .quick-toggle-menu-button,
+                .quick-toggle-has-menu .quick-toggle-menu-button {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                /* Quick Settings Header Round Buttons */
+                .quick-settings .icon-button,
+                .quick-settings-system-item .icon-button,
+                .quick-settings-system-item > StButton,
+                .qpatcher-recolor-menus .quick-settings .icon-button,
+                .qpatcher-recolor-menus .quick-settings-system-item .icon-button,
+                .qpatcher-menus-theme .quick-settings .icon-button,
+                .qpatcher-menus-theme .quick-settings-system-item .icon-button,
+                .qpatcher-qs-theme .quick-settings .icon-button,
+                .qpatcher-qs-theme .quick-settings-system-item .icon-button {
+                    background-color: ${cardBg} !important;
+                }
+
+                .quick-settings .icon-button:hover,
+                .quick-settings-system-item .icon-button:hover,
+                .quick-settings-system-item > StButton:hover,
+                .qpatcher-recolor-menus .quick-settings .icon-button:hover,
+                .qpatcher-recolor-menus .quick-settings-system-item .icon-button:hover,
+                .qpatcher-menus-theme .quick-settings .icon-button:hover,
+                .qpatcher-menus-theme .quick-settings-system-item .icon-button:hover,
+                .qpatcher-qs-theme .quick-settings .icon-button:hover,
+                .qpatcher-qs-theme .quick-settings-system-item .icon-button:hover {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                /* Quick Sliders */
+                .quick-settings .slider,
+                .qpatcher-menus-theme .slider,
+                .qpatcher-recolor-menus .slider,
+                .qpatcher-qs-theme .slider {
+                    background-color: ${sliderTroughBg} !important;
+                    -barlevel-active-background-color: ${accentHex} !important;
+                }
+
+                /* Calendar Month Header & Pagers */
+                .calendar .calendar-month-header .pager-button,
+                .qpatcher-menus-theme .calendar .calendar-month-header .pager-button,
+                .qpatcher-recolor-menus .calendar .calendar-month-header .pager-button,
+                .qpatcher-datemenu-theme .calendar .calendar-month-header .pager-button {
+                    background-color: ${cardBg} !important;
+                }
+
+                .calendar .calendar-month-header .pager-button:hover,
+                .qpatcher-menus-theme .calendar .calendar-month-header .pager-button:hover,
+                .qpatcher-recolor-menus .calendar .calendar-month-header .pager-button:hover,
+                .qpatcher-datemenu-theme .calendar .calendar-month-header .pager-button:hover {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                .calendar .calendar-month-header .calendar-month-label,
+                .qpatcher-menus-theme .calendar .calendar-month-header .calendar-month-label,
+                .qpatcher-recolor-menus .calendar .calendar-month-header .calendar-month-label,
+                .qpatcher-datemenu-theme .calendar .calendar-month-header .calendar-month-label {
+                    background-color: ${cardBg} !important;
+                    border-radius: 999px !important;
+                }
+
+                /* Calendar Days */
+                .calendar .calendar-day-base:hover,
+                .qpatcher-menus-theme .calendar .calendar-day-base:hover,
+                .qpatcher-recolor-menus .calendar .calendar-day-base:hover,
+                .qpatcher-datemenu-theme .calendar .calendar-day-base:hover {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                .calendar .calendar-day-base:selected,
+                .qpatcher-menus-theme .calendar .calendar-day-base:selected,
+                .qpatcher-recolor-menus .calendar .calendar-day-base:selected,
+                .qpatcher-datemenu-theme .calendar .calendar-day-base:selected {
+                    background-color: ${cardActiveBg} !important;
+                }
+
+                .calendar .calendar-day.calendar-today,
+                .qpatcher-menus-theme .calendar .calendar-day.calendar-today,
+                .qpatcher-recolor-menus .calendar .calendar-day.calendar-today,
+                .qpatcher-datemenu-theme .calendar .calendar-day.calendar-today {
+                    background-color: ${accentHex} !important;
+                    color: #ffffff !important;
+                }
+
+                /* Today Button */
+                .datemenu-today-button,
+                .qpatcher-menus-theme .datemenu-today-button,
+                .qpatcher-recolor-menus .datemenu-today-button,
+                .qpatcher-datemenu-theme .datemenu-today-button {
+                    background-color: ${cardBg} !important;
+                }
+
+                .datemenu-today-button:hover,
+                .qpatcher-menus-theme .datemenu-today-button:hover,
+                .qpatcher-recolor-menus .datemenu-today-button:hover,
+                .qpatcher-datemenu-theme .datemenu-today-button:hover {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                /* World Clocks, Weather, Events Buttons */
+                .world-clocks-button,
+                .weather-button,
+                .events-button,
+                .qpatcher-menus-theme .world-clocks-button,
+                .qpatcher-menus-theme .weather-button,
+                .qpatcher-menus-theme .events-button,
+                .qpatcher-recolor-menus .world-clocks-button,
+                .qpatcher-recolor-menus .weather-button,
+                .qpatcher-recolor-menus .events-button,
+                .qpatcher-datemenu-theme .world-clocks-button,
+                .qpatcher-datemenu-theme .weather-button,
+                .qpatcher-datemenu-theme .events-button {
+                    background-color: ${cardBg} !important;
+                }
+
+                .world-clocks-button:hover,
+                .weather-button:hover,
+                .events-button:hover,
+                .qpatcher-menus-theme .world-clocks-button:hover,
+                .qpatcher-menus-theme .weather-button:hover,
+                .qpatcher-menus-theme .events-button:hover,
+                .qpatcher-recolor-menus .world-clocks-button:hover,
+                .qpatcher-recolor-menus .weather-button:hover,
+                .qpatcher-recolor-menus .events-button:hover,
+                .qpatcher-datemenu-theme .world-clocks-button:hover,
+                .qpatcher-datemenu-theme .weather-button:hover,
+                .qpatcher-datemenu-theme .events-button:hover {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                /* Clear all notifications button */
+                .message-list-clear-button,
+                .qpatcher-menus-theme .message-list-clear-button,
+                .qpatcher-recolor-menus .message-list-clear-button,
+                .qpatcher-datemenu-theme .message-list-clear-button {
+                    background-color: ${cardBg} !important;
+                }
+
+                .message-list-clear-button:hover,
+                .qpatcher-menus-theme .message-list-clear-button:hover,
+                .qpatcher-recolor-menus .message-list-clear-button:hover,
+                .qpatcher-datemenu-theme .message-list-clear-button:hover {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                /* Submenus in Quick Settings */
+                .quick-toggle-menu,
+                .qpatcher-recolor-menus .quick-toggle-menu,
+                .qpatcher-menus-theme .quick-toggle-menu,
+                .qpatcher-qs-theme .quick-toggle-menu {
+                    background-color: ${cardBg} !important;
                     border: 1px solid rgba(255, 255, 255, 0.12) !important;
                 }
             `;
@@ -1059,26 +1308,31 @@ export default class QPatcherExtension extends Extension {
 
             const toggles = [];
             for (const child of grid) {
-                if (child.visible && child.has_style_class_name && child.has_style_class_name('quick-toggle')) {
+                if (!child.visible) continue;
+                const isToggle = child.has_style_class_name?.('quick-toggle') ||
+                                 child.has_style_class_name?.('quick-toggle-has-menu') ||
+                                 child.constructor?.name?.endsWith('Toggle');
+                const isSlider = child.has_style_class_name?.('quick-slider') ||
+                                 child.constructor?.name?.endsWith('Slider');
+                if (isToggle && !isSlider) {
                     toggles.push(child);
                 }
             }
 
-            if (toggles.length % 2 !== 0 && enabled) {
-                const lastToggle = toggles[toggles.length - 1];
-                const meta = layout.get_child_meta(grid, lastToggle);
-                if (meta) {
-                    meta.columnSpan = 2;
-                    meta.column_span = 2;
+            const shouldExpandLast = enabled && (toggles.length % 2 !== 0);
+            for (let i = 0; i < toggles.length; i++) {
+                const toggle = toggles[i];
+                const span = (shouldExpandLast && i === toggles.length - 1) ? 2 : 1;
+                if (layout.child_set_property) {
+                    try {
+                        layout.child_set_property(grid, toggle, 'column-span', span);
+                    } catch (e) {}
                 }
-            } else {
-                toggles.forEach(toggle => {
-                    const meta = layout.get_child_meta(grid, toggle);
-                    if (meta) {
-                        meta.columnSpan = 1;
-                        meta.column_span = 1;
-                    }
-                });
+                const meta = layout.get_child_meta ? layout.get_child_meta(grid, toggle) : null;
+                if (meta) {
+                    meta.columnSpan = span;
+                    meta.column_span = span;
+                }
             }
             grid.queue_relayout();
         } catch (e) {}
@@ -1618,6 +1872,29 @@ export default class QPatcherExtension extends Extension {
 
         const self = this;
 
+        if (!this._origScreenshotOpen) {
+            this._origScreenshotOpen = Main.screenshotUI.open;
+            Main.screenshotUI.open = async function(...args) {
+                const res = await self._origScreenshotOpen.apply(this, args);
+                try {
+                    const showPointer = self._settings?.get_boolean('screenshot-show-pointer');
+                    if (this._showPointerButton && this._showPointerButton.checked !== showPointer) {
+                        this._showPointerButton.checked = showPointer;
+                    }
+                } catch (e) {}
+                return res;
+            };
+        }
+
+        if (Main.screenshotUI._showPointerButton && !Main.screenshotUI._showPointerButton._qpatcherPointerHooked) {
+            Main.screenshotUI._showPointerButton._qpatcherPointerHooked = true;
+            Main.screenshotUI._showPointerButton.connect('notify::checked', () => {
+                if (this._settings) {
+                    this._settings.set_boolean('screenshot-show-pointer', Main.screenshotUI._showPointerButton.checked);
+                }
+            });
+        }
+
         Main.screenshotUI._saveScreenshot = async function() {
             let file = null;
 
@@ -1955,6 +2232,10 @@ export default class QPatcherExtension extends Extension {
 
     _cleanupScreenshotCustomizations() {
         if (Main.screenshotUI) {
+            if (this._origScreenshotOpen) {
+                Main.screenshotUI.open = this._origScreenshotOpen;
+                this._origScreenshotOpen = null;
+            }
             if (this._origSaveScreenshot) {
                 Main.screenshotUI._saveScreenshot = this._origSaveScreenshot;
                 this._origSaveScreenshot = null;

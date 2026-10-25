@@ -507,6 +507,7 @@ app.connect('activate', () => {
     });
     pageScreenshots.add(screenshotUiGroup);
 
+    addSwitch(screenshotUiGroup, 'Показывать указатель мыши', 'Отображать курсор мыши на создаваемых скриншотах по умолчанию', 'screenshot-show-pointer');
     addSwitch(screenshotUiGroup, 'Быстрый скриншот', 'Мгновенный снимок сразу после выделения области мышью (без нажатия Enter)', 'screenshot-quick-capture');
     addSwitch(screenshotUiGroup, 'Сбросить область выделения', 'Не оставлять рамку выделения по умолчанию при открытии меню скриншота', 'screenshot-clear-selection');
     addSwitch(screenshotUiGroup, 'Скрыть нижнее меню инструментов', 'Скрыть панель с кнопками «Область / Экран / Окно / Видео» для чистого экрана', 'screenshot-hide-panel');
@@ -527,13 +528,22 @@ app.connect('activate', () => {
     pageOther.add(themeColorGroup);
 
     const themeColorRow = new Adw.EntryRow({
-        title: _('Цвет подложки (HEX)'),
+        title: _('Основной цвет панелей и окон (HEX)'),
         text: settings.get_string('theme-color'),
     });
     themeColorRow.connect('changed', () => {
         settings.set_string('theme-color', themeColorRow.text);
     });
     themeColorGroup.add(themeColorRow);
+
+    const themeCardColorRow = new Adw.EntryRow({
+        title: _('Цвет карточек и кнопок (HEX, пусто = авто)'),
+        text: settings.get_string('theme-card-color'),
+    });
+    themeCardColorRow.connect('changed', () => {
+        settings.set_string('theme-card-color', themeCardColorRow.text.trim());
+    });
+    themeColorGroup.add(themeCardColorRow);
 
     addSwitch(themeColorGroup, 'Перекрашивать все меню и диалоги', 'Применять единый цвет темы к контекстным меню, языку и системным окнам', 'recolor-all-menus-and-dialogs');
     addStyleCombo(themeColorGroup, 'Стиль меню и диалогов', 'menus-dialogs-style');
