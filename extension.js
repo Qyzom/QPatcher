@@ -290,7 +290,26 @@ export default class QPatcherExtension extends Extension {
         });
 
         watchKey(this._settings, 'dock-magnification', () => {
-            this._setupDockMagnification();
+            const enabled = this._getSettingBool('dock-magnification');
+            if (!enabled) {
+                const dashes = this._getAllDashes();
+                for (const dash of dashes) {
+                    const box = dash._box || dash;
+                    if (box?.get_children) {
+                        for (const item of box.get_children()) {
+                            const icon = item.child || item;
+                            if (icon?.ease) {
+                                icon.ease({ scale_x: 1.0, scale_y: 1.0, duration: 100 });
+                            }
+                        }
+                    }
+                    if (dash._showAppsIcon?.ease) {
+                        dash._showAppsIcon.ease({ scale_x: 1.0, scale_y: 1.0, duration: 100 });
+                    }
+                }
+            } else {
+                this._setupDockMagnification();
+            }
         });
 
         watchKey(this._settings, 'dock-icon-size', () => {
@@ -580,8 +599,10 @@ export default class QPatcherExtension extends Extension {
             this._signals.push({ obj: Main.overview, id: this._overviewHidingId });
         }
 
-        if (global.stage) {
-            const stageChildId = global.stage.connect('child-added', (_, child) => {
+        const watchContainer = (container) => {
+            if (!container) return;
+            const id = container.connect('child-added', (_, child) => {
+                if (!child) return;
                 if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
                     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                         this._syncDashToDockSettings();
@@ -590,7 +611,18 @@ export default class QPatcherExtension extends Extension {
                     });
                 }
             });
-            this._signals.push({ obj: global.stage, id: stageChildId });
+            this._signals.push({ obj: container, id });
+        };
+        watchContainer(Main.uiGroup);
+        watchContainer(global.stage);
+
+        if (Main.layoutManager) {
+            if (Main.layoutManager._startingUp) {
+                const startId = Main.layoutManager.connect('startup-complete', () => {
+                    this._setupDockMagnification();
+                });
+                this._signals.push({ obj: Main.layoutManager, id: startId });
+            }
         }
 
         watchKey(this._settings, 'accent-color', () => {
@@ -636,6 +668,14 @@ export default class QPatcherExtension extends Extension {
         this._setupDockMagnification();
         this._setupScreenShieldPatch();
         this._setupScreenshotCustomizations();
+
+        // Поэтапные проходы инициализации увеличения дока после перезагрузки
+        [400, 1200, 2500, 5000].forEach(delay => {
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+                this._setupDockMagnification();
+                return GLib.SOURCE_REMOVE;
+            });
+        });
     }
 
     _getAccentHex() {
@@ -1356,6 +1396,12 @@ export default class QPatcherExtension extends Extension {
                 if (!this._dockManager) {
                     try {
                         this._dockManager = new DockManager(this._dockAdapter);
+                        if (this._dockManager) {
+                            const docksReadyId = this._dockManager.connect('docks-ready', () => {
+                                this._setupDockMagnification();
+                            });
+                            this._signals.push({ obj: this._dockManager, id: docksReadyId });
+                        }
                     } catch (e) {
                         console.error('[QPatcher] Error initializing DockManager:', e);
                     }
@@ -1422,87 +1468,169 @@ export default class QPatcherExtension extends Extension {
         } catch (e) {}
     }
 
-    _setupDockMagnification() {
-        try {
-            const dashes = [];
-            if (Main.overview?.dash) dashes.push(Main.overview.dash);
-            if (Main.overview?._overview?._controls?._dash) dashes.push(Main.overview._overview._controls._dash);
+    _getAllDashes() {
+        const dashes = new Set();
+        if (Main.overview?.dash) dashes.add(Main.overview.dash);
+        if (Main.overview?._overview?._controls?._dash) dashes.add(Main.overview._overview._controls._dash);
 
-            const stageChildren = global.stage.get_children();
-            for (const child of stageChildren) {
+        // 1. Из DockManager
+        if (this._dockManager?._allDocks) {
+            for (const dock of this._dockManager._allDocks) {
+                if (dock?.dash) dashes.add(dock.dash);
+            }
+        }
+
+        // 2. Из Main.uiGroup и global.stage
+        const searchContainer = (parent) => {
+            if (!parent?.get_children) return;
+            for (const child of parent.get_children()) {
+                if (!child) continue;
                 if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
+                    if (child.dash) dashes.add(child.dash);
                     const slider = child._slider || child.get_children?.()[0];
                     const content = slider?.get_child?.() || slider;
-                    if (content) {
-                        for (const c of content.get_children?.() || []) {
-                            if (c.name === 'dash' || (c.has_style_class_name && c.has_style_class_name('dash'))) {
-                                dashes.push(c);
+                    if (content?.get_children) {
+                        for (const c of content.get_children()) {
+                            if (c.name === 'dash' || (c.has_style_class_name && c.has_style_class_name('dash')) || c.dash) {
+                                dashes.add(c.dash || c);
                             }
                         }
                     }
-                    if (child.dash) dashes.push(child.dash);
                 }
             }
+        };
 
-            const enableMagnify = this._getSettingBool('dock-magnification');
+        if (Main.uiGroup) searchContainer(Main.uiGroup);
+        if (global.stage) searchContainer(global.stage);
 
-            for (const dash of dashes) {
-                if (dash.clip_to_allocation !== undefined) dash.clip_to_allocation = false;
-                const box = dash._box || dash;
-                if (box.clip_to_allocation !== undefined) box.clip_to_allocation = false;
+        return Array.from(dashes);
+    }
 
-                if (!box.get_children) continue;
+    _hookDockIcon(icon) {
+        if (!icon) return;
+        if (icon.clip_to_allocation !== undefined) icon.clip_to_allocation = false;
+        icon.set_pivot_point(0.5, 0.5);
 
-                for (const item of box.get_children()) {
-                    if (item.clip_to_allocation !== undefined) item.clip_to_allocation = false;
-                    const icon = item.child || item;
-                    if (!icon) continue;
-                    if (icon.clip_to_allocation !== undefined) icon.clip_to_allocation = false;
+        if (!icon._qpatcherConnected) {
+            icon._qpatcherConnected = true;
 
-                    icon.set_pivot_point(0.5, 0.5);
+            icon.connect('notify::hover', () => {
+                if (!this._getSettingBool('dock-magnification')) return;
+                if (icon.hover) {
+                    icon.ease({
+                        scale_x: 1.15,
+                        scale_y: 1.15,
+                        duration: 120,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+                } else {
+                    icon.ease({
+                        scale_x: 1.0,
+                        scale_y: 1.0,
+                        duration: 140,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+                }
+            });
 
-                    if (!icon._qpatcherConnected) {
-                        icon._qpatcherConnected = true;
-                        icon.connect('notify::hover', () => {
-                            if (!this._getSettingBool('dock-magnification')) return;
-                            if (icon.hover) {
-                                icon.ease({
-                                    scale_x: 1.15,
-                                    scale_y: 1.15,
-                                    duration: 120,
-                                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                                });
-                            } else {
-                                icon.ease({
-                                    scale_x: 1.0,
-                                    scale_y: 1.0,
-                                    duration: 140,
-                                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                                });
-                            }
-                        });
-
-                        icon.connect('button-press-event', () => {
-                            icon.ease({
-                                scale_x: 0.95,
-                                scale_y: 0.95,
-                                duration: 80,
-                                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                                onComplete: () => {
-                                    icon.ease({
-                                        scale_x: icon.hover ? 1.15 : 1.0,
-                                        scale_y: icon.hover ? 1.15 : 1.0,
-                                        duration: 120,
-                                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                                    });
-                                }
-                            });
-                            return Clutter.EVENT_PROPAGATE;
+            icon.connect('button-press-event', () => {
+                if (!this._getSettingBool('dock-magnification')) return Clutter.EVENT_PROPAGATE;
+                icon.ease({
+                    scale_x: 0.95,
+                    scale_y: 0.95,
+                    duration: 80,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    onComplete: () => {
+                        icon.ease({
+                            scale_x: icon.hover ? 1.15 : 1.0,
+                            scale_y: icon.hover ? 1.15 : 1.0,
+                            duration: 120,
+                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                         });
                     }
+                });
+                return Clutter.EVENT_PROPAGATE;
+            });
+        }
+    }
+
+    _hookDockItem(item) {
+        if (!item) return;
+        if (item.clip_to_allocation !== undefined) item.clip_to_allocation = false;
+
+        const icon = item.child || item;
+        this._hookDockIcon(icon);
+
+        if (icon?.toggleButton) {
+            this._hookDockIcon(icon.toggleButton);
+        }
+    }
+
+    _setupDashMagnification(dash) {
+        if (!dash) return;
+
+        // Отключаем обрезку по всей цепочке родителей
+        let curr = dash;
+        while (curr && curr !== global.stage && curr !== Main.uiGroup) {
+            if (curr.clip_to_allocation !== undefined) curr.clip_to_allocation = false;
+            curr = curr.get_parent?.();
+        }
+
+        if (dash.clip_to_allocation !== undefined) dash.clip_to_allocation = false;
+        if (dash._dashContainer) dash._dashContainer.clip_to_allocation = false;
+        if (dash._scrollView) dash._scrollView.clip_to_allocation = false;
+        if (dash._boxContainer) dash._boxContainer.clip_to_allocation = false;
+
+        const box = dash._box || dash;
+        if (box) {
+            if (box.clip_to_allocation !== undefined) box.clip_to_allocation = false;
+
+            if (!box._qpatcherChildAddedHooked) {
+                box._qpatcherChildAddedHooked = true;
+                box.connect('child-added', (_, item) => {
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        this._hookDockItem(item);
+                        return GLib.SOURCE_REMOVE;
+                    });
+                });
+            }
+
+            if (box.get_children) {
+                for (const item of box.get_children()) {
+                    this._hookDockItem(item);
                 }
             }
-        } catch (e) {}
+        }
+
+        if (dash._redisplay && !dash._qpatcherRedisplayHooked) {
+            dash._qpatcherRedisplayHooked = true;
+            const origRedisplay = dash._redisplay.bind(dash);
+            dash._redisplay = () => {
+                origRedisplay();
+                GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    this._setupDashMagnification(dash);
+                    return GLib.SOURCE_REMOVE;
+                });
+            };
+        }
+
+        if (dash._showAppsIcon) {
+            this._hookDockItem(dash._showAppsIcon);
+            if (dash.showAppsButton) {
+                this._hookDockItem(dash.showAppsButton);
+            }
+        }
+    }
+
+    _setupDockMagnification() {
+        try {
+            const dashes = this._getAllDashes();
+            for (const dash of dashes) {
+                this._setupDashMagnification(dash);
+            }
+        } catch (e) {
+            console.error('[QPatcher] Error in _setupDockMagnification:', e);
+        }
     }
 
     _applyQuickSettingsFullWidth() {
