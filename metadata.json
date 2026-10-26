@@ -11,6 +11,10 @@
     "50",
     "51"
   ],
+  "session-modes": [
+    "user",
+    "unlock-dialog"
+  ],
   "settings-schema": "org.gnome.shell.extensions.qpatcher",
   "gettext-domain": "qpatcher",
   "url": "",
