@@ -10,6 +10,8 @@ import * as WindowPreview from 'resource:///org/gnome/shell/ui/windowPreview.js'
 import * as Dash from 'resource:///org/gnome/shell/ui/dash.js';
 import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import * as Layout from 'resource:///org/gnome/shell/ui/layout.js';
+import * as UnlockDialogModule from 'resource:///org/gnome/shell/ui/unlockDialog.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { DockManager } from './dock/docking.js';
 
@@ -2329,37 +2331,74 @@ export default class QPatcherExtension extends Extension {
         }
     }
 
+    _applyMultiMonitorFixToDialog(dialog) {
+        if (!dialog) return;
+        try {
+            const screenShieldGroup = Main.layoutManager?.screenShieldGroup;
+            if (screenShieldGroup) {
+                if (!dialog._qpatcherBound) {
+                    dialog._qpatcherBound = true;
+                    dialog.add_constraint(new Clutter.BindConstraint({
+                        source: screenShieldGroup,
+                        coordinate: Clutter.BindCoordinate.ALL,
+                    }));
+                }
+                if (dialog._backgroundGroup && !dialog._backgroundGroup._qpatcherBound) {
+                    dialog._backgroundGroup._qpatcherBound = true;
+                    dialog._backgroundGroup.add_constraint(new Clutter.BindConstraint({
+                        source: screenShieldGroup,
+                        coordinate: Clutter.BindCoordinate.ALL,
+                    }));
+                }
+            }
+
+            if (Main.screenShield?._lockDialogGroup) {
+                Main.screenShield._lockDialogGroup.style = 'background-color: transparent;';
+            }
+
+            const monitors = Main.layoutManager?.monitors || [];
+            if (dialog._backgroundGroup && monitors.length > 0) {
+                const children = dialog._backgroundGroup.get_children();
+                children.forEach((widget, idx) => {
+                    if (idx < monitors.length) {
+                        const m = monitors[idx];
+                        widget.set_position(m.x, m.y);
+                        widget.set_size(m.width, m.height);
+                        if (!widget.layout_manager) {
+                            widget.layout_manager = new Clutter.BinLayout();
+                        }
+                        if (!widget._qpatcherConstraint) {
+                            widget._qpatcherConstraint = true;
+                            widget.add_constraint(new Layout.MonitorConstraint({ index: idx }));
+                        }
+                        for (const child of widget.get_children()) {
+                            child.x_expand = true;
+                            child.y_expand = true;
+                        }
+                        const effect = widget.get_effect('blur');
+                        if (effect && typeof effect.queue_repaint === 'function') {
+                            effect.queue_repaint();
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('[QPatcher] Error applying multi-monitor fix to dialog:', e);
+        }
+    }
+
     _syncLockScreenBackgrounds() {
         try {
             const dialog = Main.screenShield?._dialog;
             if (!dialog) return;
 
-            const monitors = Main.layoutManager?.monitors || [];
-            if (monitors.length === 0) return;
-
-            let minX = monitors[0].x, minY = monitors[0].y;
-            let maxX = monitors[0].x + monitors[0].width;
-            let maxY = monitors[0].y + monitors[0].height;
-            for (let i = 1; i < monitors.length; i++) {
-                const m = monitors[i];
-                minX = Math.min(minX, m.x);
-                minY = Math.min(minY, m.y);
-                maxX = Math.max(maxX, m.x + m.width);
-                maxY = Math.max(maxY, m.y + m.height);
-            }
-            const totalW = maxX - minX;
-            const totalH = maxY - minY;
-
-            dialog.set_position(minX, minY);
-            dialog.set_size(totalW, totalH);
-
-            if (dialog._backgroundGroup) {
-                dialog._backgroundGroup.set_position(0, 0);
-                dialog._backgroundGroup.set_size(totalW, totalH);
-            }
+            this._applyMultiMonitorFixToDialog(dialog);
 
             if (typeof dialog._updateBackgrounds === 'function') {
                 dialog._updateBackgrounds();
+            }
+            if (typeof dialog._updateBackgroundEffects === 'function') {
+                dialog._updateBackgroundEffects();
             }
         } catch (e) {
             console.error('[QPatcher] Error syncing lock screen backgrounds:', e);
@@ -2368,13 +2407,78 @@ export default class QPatcherExtension extends Extension {
 
     _setupScreenShieldPatch() {
         try {
+            if (UnlockDialogModule?.UnlockDialog?.prototype) {
+                const proto = UnlockDialogModule.UnlockDialog.prototype;
+                if (!this._origUnlockDialogInit && proto._init) {
+                    this._origUnlockDialogInit = proto._init;
+                    const self = this;
+                    proto._init = function(parentActor) {
+                        self._origUnlockDialogInit.call(this, parentActor);
+                        self._applyMultiMonitorFixToDialog(this);
+                    };
+                }
+
+                if (!this._origUnlockDialogCreateBackground && proto._createBackground) {
+                    this._origUnlockDialogCreateBackground = proto._createBackground;
+                    const self = this;
+                    proto._createBackground = function(monitorIndex) {
+                        const monitor = Main.layoutManager.monitors[monitorIndex];
+                        if (!monitor) return;
+
+                        const widget = new St.Widget({
+                            style_class: 'screen-shield-background',
+                            x: monitor.x,
+                            y: monitor.y,
+                            width: monitor.width,
+                            height: monitor.height,
+                            effect: new Shell.BlurEffect({name: 'blur'}),
+                            layout_manager: new Clutter.BinLayout(),
+                        });
+                        widget.add_constraint(new Layout.MonitorConstraint({ index: monitorIndex }));
+
+                        const bgManager = new Background.BackgroundManager({
+                            container: widget,
+                            monitorIndex,
+                            controlPosition: false,
+                            useContentSize: false,
+                        });
+
+                        this._bgManagers.push(bgManager);
+
+                        if (bgManager.backgroundActor) {
+                            bgManager.backgroundActor.x_expand = true;
+                            bgManager.backgroundActor.y_expand = true;
+                        }
+
+                        bgManager.connect('changed', () => {
+                            if (bgManager.backgroundActor) {
+                                bgManager.backgroundActor.x_expand = true;
+                                bgManager.backgroundActor.y_expand = true;
+                            }
+                        });
+
+                        this._backgroundGroup.add_child(widget);
+                    };
+                }
+            }
+
             if (Main.screenShield) {
+                if (Main.screenShield._lockDialogGroup) {
+                    Main.screenShield._lockDialogGroup.style = 'background-color: transparent;';
+                }
+
+                if (Main.screenShield._dialog) {
+                    this._applyMultiMonitorFixToDialog(Main.screenShield._dialog);
+                }
+
                 if (!this._origScreenShieldActivate) {
                     this._origScreenShieldActivate = Main.screenShield.activate;
                     const self = this;
                     Main.screenShield.activate = function(animate) {
                         if (!self._getSettingBool('lockscreen-prevent-blank')) {
-                            return self._origScreenShieldActivate.call(this, animate);
+                            const res = self._origScreenShieldActivate.call(this, animate);
+                            if (this._dialog) self._applyMultiMonitorFixToDialog(this._dialog);
+                            return res;
                         }
 
                         if (this._activationTime === 0)
@@ -2382,6 +2486,10 @@ export default class QPatcherExtension extends Extension {
 
                         if (!this._ensureUnlockDialog(true))
                             return;
+
+                        if (this._dialog) {
+                            self._applyMultiMonitorFixToDialog(this._dialog);
+                        }
 
                         this.actor.show();
 
@@ -2451,7 +2559,9 @@ export default class QPatcherExtension extends Extension {
                     this._signals.push({ obj: Main.screenShield, id: this._screenShieldWakeUpId });
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.error('[QPatcher] Error in _setupScreenShieldPatch:', e);
+        }
     }
 
     async _setupGdmSingleUserAutoSelect() {
@@ -2497,6 +2607,17 @@ export default class QPatcherExtension extends Extension {
 
     _restoreScreenShieldPatch() {
         try {
+            if (this._origUnlockDialogInit && UnlockDialogModule?.UnlockDialog?.prototype) {
+                UnlockDialogModule.UnlockDialog.prototype._init = this._origUnlockDialogInit;
+                this._origUnlockDialogInit = null;
+            }
+            if (this._origUnlockDialogCreateBackground && UnlockDialogModule?.UnlockDialog?.prototype) {
+                UnlockDialogModule.UnlockDialog.prototype._createBackground = this._origUnlockDialogCreateBackground;
+                this._origUnlockDialogCreateBackground = null;
+            }
+            if (Main.screenShield?._lockDialogGroup) {
+                Main.screenShield._lockDialogGroup.style = null;
+            }
             if (this._origScreenShieldActivate && Main.screenShield) {
                 Main.screenShield.activate = this._origScreenShieldActivate;
                 this._origScreenShieldActivate = null;

@@ -540,4 +540,10 @@
     box-shadow: none !important;
 }
 
+/* Прозрачный фон для группы блокировки чтобы обои не перекрывались серым цветом #222226 */
+#lockDialogGroup {
+    background-color: transparent !important;
+}
+
+
 
