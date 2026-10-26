@@ -53,6 +53,12 @@
       <description>Show or hide top panel</description>
     </key>
 
+    <key name="topbar-show-in-fullscreen" type="b">
+      <default>false</default>
+      <summary>Show Top Bar in Fullscreen</summary>
+      <description>Keep the top panel visible even when a window is in fullscreen mode</description>
+    </key>
+
     <key name="activities-button" type="b">
       <default>true</default>
       <summary>Activities Button</summary>

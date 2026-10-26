@@ -569,8 +569,13 @@ export default class QPatcherExtension extends Extension {
             // ScreenShield activate hook automatically inspects the setting
         });
 
+        watchKey(this._settings, 'topbar-show-in-fullscreen', () => {
+            this._setupForceTopBarPatch();
+        });
+
         watchKey(this._settings, 'lockscreen-topbar-enable', () => {
             this._updatePanelMonitor();
+            this._updateLockScreenDateMenu();
         });
 
         watchKey(this._settings, 'lockscreen-auto-focus-password', () => {
@@ -666,11 +671,16 @@ export default class QPatcherExtension extends Extension {
         if (Main.sessionMode) {
             const sessModeId = Main.sessionMode.connect('updated', () => {
                 GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    if (Main.sessionMode.currentMode === 'unlock-dialog') {
+                    const mode = Main.sessionMode.currentMode;
+                    const isLocked = mode === 'unlock-dialog' || mode === 'gdm';
+                    this._updateDockVisibilityForSession(isLocked);
+                    if (isLocked) {
                         if (this._getSettingBool('lockscreen-topbar-enable', true)) {
                             this._updatePanelMonitor();
+                            this._updateLockScreenDateMenu();
                             this._updateKeyboardLayoutText();
                         }
+                        this._syncLockScreenBackgrounds();
                     } else {
                         this._updatePanelMonitor();
                         this._updateKeyboardLayoutText();
@@ -701,10 +711,12 @@ export default class QPatcherExtension extends Extension {
         this._setupKeyboardManagerHook();
         this._setupClassPrototypePatches();
         this._setupDockMagnification();
+        this._setupForceTopBarPatch();
         this._setupScreenShieldPatch();
         this._setupGdmSingleUserAutoSelect();
         this._setupOsdMonitorPatch();
         this._setupScreenshotCustomizations();
+        this._updateLockScreenDateMenu();
 
         // Поэтапные проходы инициализации увеличения дока после перезагрузки
         [400, 1200, 2500, 5000].forEach(delay => {
@@ -2189,6 +2201,171 @@ export default class QPatcherExtension extends Extension {
         } catch (e) {}
     }
 
+    _setupForceTopBarPatch() {
+        try {
+            if (!Main.layoutManager) return;
+            const panelBox = Main.layoutManager.panelBox;
+            if (!panelBox) return;
+
+            const enabled = this._getSettingBool('topbar-show-in-fullscreen', false);
+
+            if (Array.isArray(Main.layoutManager._trackedActors)) {
+                for (const item of Main.layoutManager._trackedActors) {
+                    if (item.actor === panelBox) {
+                        item.trackFullscreen = !enabled;
+                        break;
+                    }
+                }
+            }
+
+            if (!this._origLayoutUpdateVisibility) {
+                this._origLayoutUpdateVisibility = Main.layoutManager._updateVisibility;
+                const self = this;
+                Main.layoutManager._updateVisibility = function() {
+                    self._origLayoutUpdateVisibility.call(this);
+                    if (self._getSettingBool('topbar-show-in-fullscreen', false)) {
+                        if (panelBox) {
+                            panelBox.visible = true;
+                            panelBox.translation_y = 0;
+                        }
+                        if (Main.panel) {
+                            Main.panel.show();
+                            Main.panel.visible = true;
+                        }
+                    }
+                };
+            }
+
+            Main.layoutManager._updateVisibility();
+        } catch (e) {
+            console.error('[QPatcher] Error setting up force topbar patch:', e);
+        }
+    }
+
+    _restoreForceTopBarPatch() {
+        try {
+            if (this._origLayoutUpdateVisibility && Main.layoutManager) {
+                Main.layoutManager._updateVisibility = this._origLayoutUpdateVisibility;
+                this._origLayoutUpdateVisibility = null;
+            }
+            if (Main.layoutManager?.panelBox && Array.isArray(Main.layoutManager._trackedActors)) {
+                for (const item of Main.layoutManager._trackedActors) {
+                    if (item.actor === Main.layoutManager.panelBox) {
+                        item.trackFullscreen = true;
+                        break;
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    _updateDockVisibilityForSession(isLocked) {
+        try {
+            const allDocks = DockManager?.allDocks || this._dockManager?._allDocks || [];
+            allDocks.forEach(dock => {
+                if (isLocked) {
+                    dock.visible = false;
+                    dock.hide();
+                } else {
+                    dock.visible = true;
+                    dock.show();
+                }
+            });
+
+            if (isLocked) {
+                const uiGroup = this._getUiGroup();
+                if (uiGroup) {
+                    for (const child of uiGroup.get_children()) {
+                        if (child.name === 'dashtodockContainer') {
+                            child.visible = false;
+                            child.hide();
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[QPatcher] Error updating dock session visibility:', e);
+        }
+    }
+
+    _updateLockScreenDateMenu() {
+        try {
+            const enabled = this._getSettingBool('lockscreen-topbar-enable', true);
+            const unlockMode = Main.sessionMode?._modes?.['unlock-dialog'];
+            if (unlockMode?.panel) {
+                if (enabled) {
+                    if (!unlockMode.panel.center.includes('dateMenu')) {
+                        unlockMode.panel.center = ['dateMenu'];
+                    }
+                } else {
+                    const idx = unlockMode.panel.center.indexOf('dateMenu');
+                    if (idx !== -1) unlockMode.panel.center.splice(idx, 1);
+                }
+            }
+
+            if (Main.sessionMode?.currentMode === 'unlock-dialog') {
+                if (enabled) {
+                    if (!Main.sessionMode.panel.center.includes('dateMenu')) {
+                        Main.sessionMode.panel.center = ['dateMenu'];
+                    }
+                    const dateMenu = Main.panel?.statusArea?.dateMenu;
+                    if (dateMenu) {
+                        if (dateMenu.container) {
+                            dateMenu.container.visible = true;
+                            dateMenu.container.show();
+                        }
+                        if (dateMenu._clockDisplay) {
+                            dateMenu._clockDisplay.visible = true;
+                        }
+                        dateMenu.visible = true;
+                    }
+                }
+                if (typeof Main.panel?._updatePanel === 'function') {
+                    Main.panel._updatePanel();
+                }
+            }
+        } catch (e) {
+            console.error('[QPatcher] Error updating lockscreen dateMenu:', e);
+        }
+    }
+
+    _syncLockScreenBackgrounds() {
+        try {
+            const dialog = Main.screenShield?._dialog;
+            if (!dialog) return;
+
+            const monitors = Main.layoutManager?.monitors || [];
+            if (monitors.length === 0) return;
+
+            let minX = monitors[0].x, minY = monitors[0].y;
+            let maxX = monitors[0].x + monitors[0].width;
+            let maxY = monitors[0].y + monitors[0].height;
+            for (let i = 1; i < monitors.length; i++) {
+                const m = monitors[i];
+                minX = Math.min(minX, m.x);
+                minY = Math.min(minY, m.y);
+                maxX = Math.max(maxX, m.x + m.width);
+                maxY = Math.max(maxY, m.y + m.height);
+            }
+            const totalW = maxX - minX;
+            const totalH = maxY - minY;
+
+            dialog.set_position(minX, minY);
+            dialog.set_size(totalW, totalH);
+
+            if (dialog._backgroundGroup) {
+                dialog._backgroundGroup.set_position(0, 0);
+                dialog._backgroundGroup.set_size(totalW, totalH);
+            }
+
+            if (typeof dialog._updateBackgrounds === 'function') {
+                dialog._updateBackgrounds();
+            }
+        } catch (e) {
+            console.error('[QPatcher] Error syncing lock screen backgrounds:', e);
+        }
+    }
+
     _setupScreenShieldPatch() {
         try {
             if (Main.screenShield) {
@@ -2221,7 +2398,35 @@ export default class QPatcherExtension extends Extension {
                     };
                 }
 
+                if (!this._origScreenShieldSetActive) {
+                    this._origScreenShieldSetActive = Main.screenShield._setActive;
+                    const self = this;
+                    Main.screenShield._setActive = function(active) {
+                        if (self._getSettingBool('lockscreen-prevent-blank') && active) {
+                            // Suppress active=true to keep gsd-power from blanking the screen
+                            return;
+                        }
+                        self._origScreenShieldSetActive.call(this, active);
+                    };
+                }
+
+                if (!this._monitorManagerPowerSaveId && global.backend?.get_monitor_manager) {
+                    const mm = global.backend.get_monitor_manager();
+                    if (mm) {
+                        this._monitorManagerPowerSaveId = mm.connect('power-save-mode-changed', () => {
+                            if (this._getSettingBool('lockscreen-prevent-blank') &&
+                                Main.sessionMode?.currentMode === 'unlock-dialog') {
+                                if (typeof mm.get_power_save_mode === 'function' && mm.get_power_save_mode() !== 0) {
+                                    mm.set_power_save_mode(0);
+                                }
+                            }
+                        });
+                        this._signals.push({ obj: mm, id: this._monitorManagerPowerSaveId });
+                    }
+                }
+
                 const triggerPromptDirectly = () => {
+                    this._syncLockScreenBackgrounds();
                     if (!this._getSettingBool('lockscreen-auto-focus-password', true))
                         return;
 
@@ -2296,6 +2501,17 @@ export default class QPatcherExtension extends Extension {
                 Main.screenShield.activate = this._origScreenShieldActivate;
                 this._origScreenShieldActivate = null;
             }
+            if (this._origScreenShieldSetActive && Main.screenShield) {
+                Main.screenShield._setActive = this._origScreenShieldSetActive;
+                this._origScreenShieldSetActive = null;
+            }
+            if (this._monitorManagerPowerSaveId && global.backend?.get_monitor_manager) {
+                const mm = global.backend.get_monitor_manager();
+                if (mm) {
+                    mm.disconnect(this._monitorManagerPowerSaveId);
+                }
+                this._monitorManagerPowerSaveId = 0;
+            }
             if (this._origLoginDialogLoadUserList) {
                 import('resource:///org/gnome/shell/gdm/loginDialog.js').then(LoginDialogMod => {
                     if (LoginDialogMod?.LoginDialog?.prototype) {
@@ -2352,6 +2568,13 @@ export default class QPatcherExtension extends Extension {
         this._restoreClassPrototypePatches();
         this._restoreScreenShieldPatch();
         this._restoreOsdMonitorPatch();
+        this._restoreForceTopBarPatch();
+        this._updateDockVisibilityForSession(false);
+        const unlockMode = Main.sessionMode?._modes?.['unlock-dialog'];
+        if (unlockMode?.panel?.center) {
+            const idx = unlockMode.panel.center.indexOf('dateMenu');
+            if (idx !== -1) unlockMode.panel.center.splice(idx, 1);
+        }
         this._destroyOverviewBlur();
 
         const controls = Main.overview?._overview?._controls;
