@@ -787,6 +787,10 @@ export class UnityIndicator extends IndicatorBase {
             'changed',
             () => this._updateNotificationsCount(),
         ], [
+            Docking.DockManager.settings,
+            'changed::show-icons-notifications-counter',
+            () => this._updateNotificationsCount(),
+        ], [
             this._source,
             'style-changed',
             () => this._updateIconStyle(),
@@ -903,6 +907,11 @@ export class UnityIndicator extends IndicatorBase {
     }
 
     _updateNotificationsCount() {
+        if (!Docking.DockManager.settings?.showIconsNotificationsCounter) {
+            this.setNotificationCount(0);
+            return;
+        }
+
         const remoteCount = this._remoteEntry['count-visible']
             ? this._remoteEntry.count ?? 0 : 0;
 
@@ -920,6 +929,15 @@ export class UnityIndicator extends IndicatorBase {
     }
 
     _updateNotificationsBadge(text) {
+        if (!Docking.DockManager.settings?.showIconsNotificationsCounter) {
+            if (this._notificationBadgeBin) {
+                this._signalsHandler.removeWithLabel(UnityIndicator.notificationBadgeSignals);
+                this._notificationBadgeBin.destroy();
+                this._notificationBadgeBin = null;
+            }
+            return;
+        }
+
         if (this._notificationBadgeBin) {
             this._notificationBadgeBin.child.text = text;
             this._updateNotificationBadgeStyle();
@@ -997,6 +1015,10 @@ export class UnityIndicator extends IndicatorBase {
     }
 
     setNotificationCount(count) {
+        if (!Docking.DockManager.settings?.showIconsNotificationsCounter) {
+            count = 0;
+        }
+
         if (count > 0) {
             const text = this._notificationBadgeCountToText(count);
             this._updateNotificationsBadge(text);

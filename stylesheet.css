@@ -97,12 +97,20 @@
 .qpatcher-hide-dock-notification-badge .app-well-app .notification-badge,
 .qpatcher-hide-dock-notification-badge .overview-tile .notification-badge,
 .qpatcher-hide-dock-notification-badge .icon-grid .notification-badge {
-    display: none !important;
     opacity: 0 !important;
-    width: 0 !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    font-size: 0px !important;
+    min-width: 0px !important;
+    min-height: 0px !important;
+    max-width: 0px !important;
+    max-height: 0px !important;
+    width: 0px !important;
+    height: 0px !important;
+    border-width: 0px !important;
+    margin: 0px !important;
+    padding: 0px !important;
+    color: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
 }
 
 

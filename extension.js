@@ -267,6 +267,7 @@ export default class QPatcherExtension extends Extension {
             const hide = getBool('dock-notification-badge-hide');
             toggleClass('qpatcher-hide-dock-notification-badge', hide);
             this._syncDashToDockSettings();
+            this._updateDockNotificationBadgesVisibility();
         });
 
         watchKey(this._settings, 'dock-show-mounts', () => {
@@ -825,6 +826,27 @@ export default class QPatcherExtension extends Extension {
                 .qpatcher-badge-accent .icon-grid .notification-badge {
                     background-color: ${accentHex} !important;
                     color: #ffffff !important;
+                }
+
+                .qpatcher-hide-dock-notification-badge .notification-badge,
+                .qpatcher-hide-dock-notification-badge #dashtodockContainer .notification-badge,
+                .qpatcher-hide-dock-notification-badge .app-well-app .notification-badge,
+                .qpatcher-hide-dock-notification-badge .overview-tile .notification-badge,
+                .qpatcher-hide-dock-notification-badge .icon-grid .notification-badge {
+                    opacity: 0 !important;
+                    font-size: 0px !important;
+                    min-width: 0px !important;
+                    min-height: 0px !important;
+                    max-width: 0px !important;
+                    max-height: 0px !important;
+                    width: 0px !important;
+                    height: 0px !important;
+                    border-width: 0px !important;
+                    margin: 0px !important;
+                    padding: 0px !important;
+                    color: transparent !important;
+                    background-color: transparent !important;
+                    border-color: transparent !important;
                 }
 
                 .app-menu,
@@ -1501,6 +1523,38 @@ export default class QPatcherExtension extends Extension {
                 d2d.set_boolean('custom-background-color', false);
                 d2d.set_double('background-opacity', opacity);
             }
+
+            this._updateDockNotificationBadgesVisibility();
+        } catch (e) {}
+    }
+
+    _updateDockNotificationBadgesVisibility() {
+        try {
+            const hide = this._getSettingBool('dock-notification-badge-hide');
+            const allDocks = DockManager?.allDocks || this._dockManager?._allDocks || [];
+            allDocks.forEach(dock => {
+                const dash = dock?.dash;
+                if (dash?._box) {
+                    dash._box.get_children().forEach(item => {
+                        const icon = item?.child;
+                        if (icon?._indicator?._indicators) {
+                            icon._indicator._indicators.forEach(ind => {
+                                if (typeof ind._updateNotificationsCount === 'function') {
+                                    ind._updateNotificationsCount();
+                                }
+                            });
+                        }
+                        if (icon?._iconContainer) {
+                            icon._iconContainer.get_children().forEach(c => {
+                                if (c?.has_style_class_name?.('notification-badge') ||
+                                    c?.child?.has_style_class_name?.('notification-badge')) {
+                                    c.visible = !hide;
+                                }
+                            });
+                        }
+                    });
+                }
+            });
         } catch (e) {}
     }
 
