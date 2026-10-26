@@ -646,6 +646,17 @@ export default class QPatcherExtension extends Extension {
             this._signals.push({ obj: Main.layoutManager, id: monChangeId });
         }
 
+        if (Main.sessionMode) {
+            const sessModeId = Main.sessionMode.connect('updated', () => {
+                GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    this._updatePanelMonitor();
+                    this._updateKeyboardLayoutText();
+                    return GLib.SOURCE_REMOVE;
+                });
+            });
+            this._signals.push({ obj: Main.sessionMode, id: sessModeId });
+        }
+
         // Первичная инициализация всех стилей и эффектов
         updatePanelColor();
         this._updatePanelMonitor();
