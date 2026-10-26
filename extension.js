@@ -17,6 +17,7 @@ import * as UnlockDialogModule from 'resource:///org/gnome/shell/ui/unlockDialog
 import * as KeyboardStatus from 'resource:///org/gnome/shell/ui/status/keyboard.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { DockManager } from './dock/docking.js';
+import { ClipboardHistoryManager, EmojiManager, QPatcherClipboardDialog } from './clipboard.js';
 
 const TopBarWindowConstraint = GObject.registerClass(
     { Implements: [Meta.ExternalConstraint] },
@@ -788,6 +789,40 @@ export default class QPatcherExtension extends Extension {
                 return GLib.SOURCE_REMOVE;
             });
         });
+
+        // Инициализация менеджера буфера обмена и эмодзи
+        try {
+            this._clipboardHistoryManager = new ClipboardHistoryManager(this, this._settings);
+            this._clipboardHistoryManager.start();
+            this._emojiManager = new EmojiManager(this);
+            this._clipboardDialog = new QPatcherClipboardDialog(this, this._clipboardHistoryManager, this._emojiManager);
+
+            Main.wm.addKeybinding(
+                'clipboard-shortcut',
+                this._settings,
+                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
+                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW | Shell.ActionMode.POPUP,
+                () => {
+                    if (this._clipboardDialog) {
+                        this._clipboardDialog.openModal('clipboard');
+                    }
+                }
+            );
+
+            Main.wm.addKeybinding(
+                'emoji-shortcut',
+                this._settings,
+                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
+                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW | Shell.ActionMode.POPUP,
+                () => {
+                    if (this._clipboardDialog) {
+                        this._clipboardDialog.openModal('emoji');
+                    }
+                }
+            );
+        } catch (e) {
+            console.error('[QPatcher] Failed to initialize Clipboard & Emoji manager:', e);
+        }
     }
 
     _getAccentHex() {
@@ -2914,6 +2949,21 @@ export default class QPatcherExtension extends Extension {
             signal.obj.disconnect(signal.id);
         }
         this._signals = [];
+
+        try {
+            Main.wm.removeKeybinding('clipboard-shortcut');
+            Main.wm.removeKeybinding('emoji-shortcut');
+        } catch (_) {}
+
+        if (this._clipboardHistoryManager) {
+            this._clipboardHistoryManager.stop();
+            this._clipboardHistoryManager = null;
+        }
+        if (this._clipboardDialog) {
+            this._clipboardDialog.destroy();
+            this._clipboardDialog = null;
+        }
+        this._emojiManager = null;
 
         // Восстанавливаем оригинальные методы клавиатуры
         this._restoreKeyboardManagerHook();

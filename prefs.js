@@ -544,7 +544,63 @@ export default class QPatcherPreferences extends ExtensionPreferences {
 
 
         // ==========================================
-        // 8. ВКЛАДКА: ПРОЧЕЕ (SYSTEM & THEME)
+        // 8. ВКЛАДКА: БУФЕР ОБМЕНА И ЭМОДЗИ (CLIPBOARD & EMOJI)
+        // ==========================================
+        const pageClipboard = new Adw.PreferencesPage({
+            title: _('Буфер и Эмодзи'),
+            icon_name: 'edit-paste-symbolic',
+        });
+        window.add(pageClipboard);
+
+        const clipboardGroup = new Adw.PreferencesGroup({
+            title: _('Буфер обмена и Эмодзи'),
+            description: _('Встроенный менеджер истории буфера обмена и панель выбора эмодзи'),
+        });
+        pageClipboard.add(clipboardGroup);
+
+        addSwitch(clipboardGroup, 'Включить буфер обмена и эмодзи', 'Сохраняет историю буфера обмена и предоставляет всплывающее окно выбора', 'clipboard-enable');
+        addSwitch(clipboardGroup, 'Автоматическая вставка при выборе', 'Автоматически вставляет скопированную запись или эмодзи сразу в активное окно', 'clipboard-auto-paste');
+        addSwitch(clipboardGroup, 'Очищать историю при перезагрузке', 'Очищает обычную историю при старте системы, сохраняя избранные (закреплённые) записи', 'clipboard-clear-on-reboot');
+
+        const limitRow = new Adw.SpinRow({
+            title: _('Лимит истории буфера'),
+            subtitle: _('Количество сохраняемых записей в истории (от 10 до 500)'),
+            adjustment: new Gtk.Adjustment({
+                lower: 10,
+                upper: 500,
+                step_increment: 10,
+                page_increment: 50,
+                value: settings.get_int('clipboard-history-limit'),
+            }),
+        });
+        limitRow.connect('notify::value', () => {
+            settings.set_int('clipboard-history-limit', limitRow.value);
+        });
+        clipboardGroup.add(limitRow);
+
+        const clipboardShortcutsGroup = new Adw.PreferencesGroup({
+            title: _('Горячие клавиши'),
+            description: _('Быстрый вызов истории буфера и панели эмодзи'),
+        });
+        pageClipboard.add(clipboardShortcutsGroup);
+
+        const shortcutRow = new Adw.ActionRow({
+            title: _('Горячая клавиша буфера обмена'),
+            subtitle: _('Открывает вкладку истории буфера'),
+        });
+        shortcutRow.add_suffix(new Gtk.Label({ label: 'Win+V  (<Super>v)', css_classes: ['dim-label'] }));
+        clipboardShortcutsGroup.add(shortcutRow);
+
+        const emojiShortcutRow = new Adw.ActionRow({
+            title: _('Горячая клавиша панели эмодзи'),
+            subtitle: _('Открывает вкладку эмодзи'),
+        });
+        emojiShortcutRow.add_suffix(new Gtk.Label({ label: 'Win+.  (<Super>period)', css_classes: ['dim-label'] }));
+        clipboardShortcutsGroup.add(emojiShortcutRow);
+
+
+        // ==========================================
+        // 9. ВКЛАДКА: ПРОЧЕЕ (SYSTEM & THEME)
         // ==========================================
         const pageOther = new Adw.PreferencesPage({
             title: _('Прочее'),

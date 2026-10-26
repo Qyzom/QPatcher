@@ -77,6 +77,17 @@
 - **All Menus and Dialogs**: Apply matching theme background, borders, and shadows to all popup menus, context menus, and system dialogs.
 - **OSD Volume Monitor Selection**: Route volume and brightness on-screen displays to a specific monitor instead of mirroring across all screens when using rotary encoders.
 
+#### 9. Integrated Clipboard History and Emoji Picker
+- **Replaces Bulky Third-Party Extensions**: Fully built-in, lightweight clipboard history and emoji selector directly in QPatcher.
+- **Two Focused Tabs**: Streamlined interface strictly limited to Clipboard History and Emoji Picker.
+- **Fast Global Shortcuts**: Default bindings for Win + V (`<Super>v`) to open Clipboard History and Win + . (`<Super>period`) to open Emoji Picker.
+- **Rich Content Support**: Stores and previews text and PNG images with thumbnails, dimensions, and timestamps.
+- **Pinning and Pruning**: Pin favorite items to keep them persistent, delete items individually, or clear all unpinned entries. Configurable history capacity (10 to 500 entries).
+- **Auto-Paste**: Automatically simulates Shift + Insert via virtual input device upon selecting an item or emoji.
+- **Persistence Across Reboots**: Keeps history safely on disk by default, with an optional toggle to clear unpinned items on system boot.
+- **Bilingual Emoji Search and Full-Width Grid**: Search emojis in Russian and English with prioritized digit/number emojis and a homogeneous 12-column grid with zero dead zones.
+- **Universal Ctrl + A**: Supports full Select All in search inputs across both English and Russian keyboard layouts (`<Control>a` and `<Control>Cyrillic_ef`).
+
 ---
 
 ### Installation

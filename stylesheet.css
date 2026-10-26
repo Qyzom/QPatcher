@@ -545,5 +545,266 @@
     background-color: transparent !important;
 }
 
+/* =================================================================== */
+/* QPatcher Clipboard & Emoji Picker Modal                             */
+/* =================================================================== */
+
+.qpatcher-clipboard-dialog {
+    background-color: rgba(30, 30, 34, 0.96) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6) !important;
+    padding: 18px !important;
+}
+
+.qpatcher-modal-container {
+    spacing: 12px;
+}
+
+.qpatcher-modal-header {
+    spacing: 10px;
+}
+
+.qpatcher-search-entry {
+    background-color: rgba(255, 255, 255, 0.07) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px !important;
+    padding: 8px 14px !important;
+    color: #ffffff !important;
+    caret-color: #3584e4 !important;
+    font-size: 14px !important;
+}
+
+.qpatcher-search-entry:focus {
+    border-color: #3584e4 !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.qpatcher-search-icon {
+    color: rgba(255, 255, 255, 0.6) !important;
+    margin-right: 6px;
+}
+
+.qpatcher-dialog-close-btn {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    border-radius: 999px !important;
+    padding: 8px !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.qpatcher-dialog-close-btn:hover {
+    background-color: rgba(230, 50, 50, 0.25) !important;
+    color: #ff5555 !important;
+}
+
+/* Tabs */
+.qpatcher-tabs-bar {
+    background-color: rgba(0, 0, 0, 0.25);
+    border-radius: 12px;
+    padding: 3px;
+    spacing: 4px;
+}
+
+.qpatcher-tab-button {
+    background-color: transparent !important;
+    color: rgba(255, 255, 255, 0.65) !important;
+    border-radius: 9px !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    padding: 7px 12px !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.qpatcher-tab-button:hover {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.qpatcher-tab-button.active {
+    background-color: rgba(255, 255, 255, 0.14) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Scroll View & Content */
+.qpatcher-scroll-view {
+    max-height: 420px;
+}
+
+.qpatcher-items-list {
+    spacing: 6px;
+    padding: 4px;
+}
+
+.qpatcher-section-header {
+    font-size: 11px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.45);
+    padding: 6px 8px 2px 8px;
+    letter-spacing: 0.5px;
+}
+
+.qpatcher-history-row {
+    background-color: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 10px !important;
+    padding: 8px 12px !important;
+    margin-bottom: 2px;
+}
+
+.qpatcher-history-row:hover,
+.qpatcher-history-row:focus {
+    background-color: rgba(255, 255, 255, 0.09) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.qpatcher-history-row.is-pinned {
+    border-left: 3px solid #f6d32d !important;
+    background-color: rgba(246, 211, 45, 0.06) !important;
+}
+
+.qpatcher-history-row-content {
+    spacing: 12px;
+}
+
+.qpatcher-type-icon {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.qpatcher-image-thumbnail {
+    border-radius: 6px;
+}
+
+.qpatcher-item-details {
+    spacing: 2px;
+}
+
+.qpatcher-item-text {
+    font-size: 13px;
+    color: #eeeeee;
+}
+
+.qpatcher-item-time {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.qpatcher-item-actions {
+    spacing: 4px;
+}
+
+.qpatcher-row-action-btn {
+    background-color: transparent !important;
+    border-radius: 8px !important;
+    padding: 6px !important;
+    color: rgba(255, 255, 255, 0.5) !important;
+    border: none !important;
+}
+
+.qpatcher-row-action-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+.qpatcher-row-action-btn.pinned {
+    color: #f6d32d !important;
+}
+
+.qpatcher-row-action-btn.delete:hover {
+    background-color: rgba(230, 50, 50, 0.25) !important;
+    color: #ff5555 !important;
+}
+
+.qpatcher-footer-bar {
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.qpatcher-footer-label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.qpatcher-clear-all-btn {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+    padding: 4px 10px !important;
+}
+
+.qpatcher-clear-all-btn:hover {
+    background-color: rgba(230, 50, 50, 0.25) !important;
+    color: #ff5555 !important;
+}
+
+.qpatcher-empty-label {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 30px;
+}
+
+/* Category pills in Emoji Tab */
+.qpatcher-category-scroll {
+    max-height: 44px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 6px;
+}
+
+.qpatcher-category-bar {
+    spacing: 4px;
+    padding: 2px;
+}
+
+.qpatcher-category-pill {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+    padding: 5px 9px !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    border: none !important;
+}
+
+.qpatcher-category-pill:hover {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
+}
+
+.qpatcher-category-pill.active {
+    background-color: rgba(53, 132, 228, 0.3) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(53, 132, 228, 0.5) !important;
+}
+
+/* Emoji Grid */
+.qpatcher-emoji-list-box {
+    padding: 4px;
+}
+
+.qpatcher-emoji-row {
+    spacing: 2px;
+    margin-bottom: 2px;
+}
+
+.qpatcher-emoji-btn {
+    background-color: transparent !important;
+    border-radius: 8px !important;
+    padding: 6px 2px !important;
+    border: none !important;
+}
+
+.qpatcher-emoji-btn:hover,
+.qpatcher-emoji-btn:focus {
+    background-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.qpatcher-emoji-char {
+    font-size: 22px !important;
+    text-align: center !important;
+}
+
+
 
 

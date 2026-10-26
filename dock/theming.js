@@ -202,6 +202,9 @@ export class ThemeManager {
             let newAlpha = Math.round(backgroundColor.alpha / 2.55) / 100;
 
             ({backgroundColor} = settings);
+            if (!backgroundColor || !backgroundColor.trim()) {
+                return;
+            }
             // backgroundColor is a string like rgb(0,0,0)
             const Color = Clutter.Color ?? Cogl.Color;
             const [ret, color] = Color.from_string(backgroundColor);

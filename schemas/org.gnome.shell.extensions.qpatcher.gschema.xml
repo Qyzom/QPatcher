@@ -489,5 +489,44 @@
       <description>'subfolder' (~/Pictures/Screenshots) or 'pictures' directly (~/Pictures)</description>
     </key>
 
+    <!-- ========================================== -->
+    <!-- 9. БУФЕР ОБМЕНА И ЭМОДЗИ (CLIPBOARD & EMOJI) -->
+    <!-- ========================================== -->
+    <key name="clipboard-enable" type="b">
+      <default>true</default>
+      <summary>Enable Clipboard and Emoji</summary>
+      <description>Capture clipboard history and provide clipboard and emoji modal picker</description>
+    </key>
+
+    <key name="clipboard-shortcut" type="as">
+      <default>['&lt;Super&gt;v']</default>
+      <summary>Clipboard History Shortcut</summary>
+      <description>Keyboard shortcut to open clipboard history tab</description>
+    </key>
+
+    <key name="emoji-shortcut" type="as">
+      <default>['&lt;Super&gt;period']</default>
+      <summary>Emoji Picker Shortcut</summary>
+      <description>Keyboard shortcut to open emoji picker tab</description>
+    </key>
+
+    <key name="clipboard-history-limit" type="i">
+      <default>50</default>
+      <summary>Clipboard History Limit</summary>
+      <description>Maximum number of items to remember in clipboard history</description>
+    </key>
+
+    <key name="clipboard-clear-on-reboot" type="b">
+      <default>false</default>
+      <summary>Clear Clipboard History on Reboot</summary>
+      <description>If true, clears unpinned clipboard history when GNOME starts up</description>
+    </key>
+
+    <key name="clipboard-auto-paste" type="b">
+      <default>true</default>
+      <summary>Auto Paste on Selection</summary>
+      <description>Automatically paste selected clipboard item or emoji into the active window</description>
+    </key>
+
   </schema>
 </schemalist>
