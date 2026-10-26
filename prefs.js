@@ -628,11 +628,14 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         addSwitch(systemThemeGroup, 'Тёмный стиль (Dark Style)', 'Использовать системную тёмную тему', 'dark-mode');
 
         const lockGroup = new Adw.PreferencesGroup({
-            title: _('Экран блокировки (Lock Screen)'),
-            description: _('Поведение системы при блокировке по Win+L'),
+            title: _('Экран блокировки и входа (Lock Screen & Login)'),
+            description: _('Поведение экрана блокировки и экрана авторизации'),
         });
         pageOther.add(lockGroup);
 
+        addSwitch(lockGroup, 'Патчить топбар и стиль на экране блокировки', 'Переносит топбар на выбранный монитор и сохраняет заглавный язык и стили', 'lockscreen-topbar-enable');
+        addSwitch(lockGroup, 'Сразу открывать ввод пароля (без шторы часов)', 'Автоматически пропускает экран с часами на локскрине и сразу активирует поле ввода', 'lockscreen-auto-focus-password');
+        addSwitch(lockGroup, 'Автовыбор единственного пользователя', 'Если в системе один пользователь — не требовать кликать по нему, а сразу запрашивать пароль', 'login-auto-select-single-user');
         addSwitch(lockGroup, 'Не тушить экран при блокировке (Win+L)', 'Оставляет экран блокировки с часами и обоями включенным, не выключая мониторы', 'lockscreen-prevent-blank');
     }
 }

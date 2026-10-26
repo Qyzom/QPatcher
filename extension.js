@@ -564,6 +564,18 @@ export default class QPatcherExtension extends Extension {
             // ScreenShield activate hook automatically inspects the setting
         });
 
+        watchKey(this._settings, 'lockscreen-topbar-enable', () => {
+            this._updatePanelMonitor();
+        });
+
+        watchKey(this._settings, 'lockscreen-auto-focus-password', () => {
+            // ScreenShield lock-screen-shown hook automatically inspects the setting
+        });
+
+        watchKey(this._settings, 'login-auto-select-single-user', () => {
+            // Handled when LoginDialog loads user list
+        });
+
         watchKey(this._settings, 'recolor-all-menus-and-dialogs', () => {
             this._updateDynamicThemeStylesheet();
         });
@@ -649,8 +661,15 @@ export default class QPatcherExtension extends Extension {
         if (Main.sessionMode) {
             const sessModeId = Main.sessionMode.connect('updated', () => {
                 GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    this._updatePanelMonitor();
-                    this._updateKeyboardLayoutText();
+                    if (Main.sessionMode.currentMode === 'unlock-dialog') {
+                        if (this._getSettingBool('lockscreen-topbar-enable', true)) {
+                            this._updatePanelMonitor();
+                            this._updateKeyboardLayoutText();
+                        }
+                    } else {
+                        this._updatePanelMonitor();
+                        this._updateKeyboardLayoutText();
+                    }
                     return GLib.SOURCE_REMOVE;
                 });
             });
@@ -678,6 +697,7 @@ export default class QPatcherExtension extends Extension {
         this._setupClassPrototypePatches();
         this._setupDockMagnification();
         this._setupScreenShieldPatch();
+        this._setupGdmSingleUserAutoSelect();
         this._setupScreenshotCustomizations();
 
         // Поэтапные проходы инициализации увеличения дока после перезагрузки
@@ -1726,6 +1746,9 @@ export default class QPatcherExtension extends Extension {
 
     _updatePanelMonitor() {
         try {
+            if (Main.sessionMode?.currentMode === 'unlock-dialog' && !this._getSettingBool('lockscreen-topbar-enable', true)) {
+                return;
+            }
             const targetMonitor = this._getSettingInt('topbar-monitor');
             const panelBox = Main.layoutManager.panelBox;
             if (!panelBox) return;
@@ -2046,34 +2069,102 @@ export default class QPatcherExtension extends Extension {
 
     _setupScreenShieldPatch() {
         try {
-            if (Main.screenShield && !this._origScreenShieldActivate) {
-                this._origScreenShieldActivate = Main.screenShield.activate;
-                const self = this;
-                Main.screenShield.activate = function(animate) {
-                    if (!self._getSettingBool('lockscreen-prevent-blank')) {
-                        return self._origScreenShieldActivate.call(this, animate);
-                    }
+            if (Main.screenShield) {
+                if (!this._origScreenShieldActivate) {
+                    this._origScreenShieldActivate = Main.screenShield.activate;
+                    const self = this;
+                    Main.screenShield.activate = function(animate) {
+                        if (!self._getSettingBool('lockscreen-prevent-blank')) {
+                            return self._origScreenShieldActivate.call(this, animate);
+                        }
 
-                    if (this._activationTime === 0)
-                        this._activationTime = GLib.get_monotonic_time();
+                        if (this._activationTime === 0)
+                            this._activationTime = GLib.get_monotonic_time();
 
-                    if (!this._ensureUnlockDialog(true))
+                        if (!this._ensureUnlockDialog(true))
+                            return;
+
+                        this.actor.show();
+
+                        if (Main.sessionMode.currentMode !== 'unlock-dialog') {
+                            this._isGreeter = Main.sessionMode.isGreeter;
+                            if (!this._isGreeter)
+                                Main.sessionMode.pushMode('unlock-dialog');
+                        }
+
+                        this._resetLockScreen({
+                            animateLockScreen: animate,
+                            fadeToBlack: false,
+                        });
+                    };
+                }
+
+                const triggerPromptDirectly = () => {
+                    if (!this._getSettingBool('lockscreen-auto-focus-password', true))
                         return;
 
-                    this.actor.show();
-
-                    if (Main.sessionMode.currentMode !== 'unlock-dialog') {
-                        this._isGreeter = Main.sessionMode.isGreeter;
-                        if (!this._isGreeter)
-                            Main.sessionMode.pushMode('unlock-dialog');
-                    }
-
-                    this._resetLockScreen({
-                        animateLockScreen: animate,
-                        fadeToBlack: false,
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        try {
+                            const dialog = Main.screenShield?._dialog;
+                            if (dialog && typeof dialog.activate === 'function') {
+                                dialog.activate();
+                            }
+                        } catch (e) {}
+                        return GLib.SOURCE_REMOVE;
                     });
                 };
+
+                if (!this._screenShieldLockShownId) {
+                    this._screenShieldLockShownId = Main.screenShield.connect('lock-screen-shown', triggerPromptDirectly);
+                    this._signals.push({ obj: Main.screenShield, id: this._screenShieldLockShownId });
+                }
+
+                if (!this._screenShieldWakeUpId) {
+                    this._screenShieldWakeUpId = Main.screenShield.connect('wake-up-screen', triggerPromptDirectly);
+                    this._signals.push({ obj: Main.screenShield, id: this._screenShieldWakeUpId });
+                }
             }
+        } catch (e) {}
+    }
+
+    async _setupGdmSingleUserAutoSelect() {
+        try {
+            const LoginDialogMod = await import('resource:///org/gnome/shell/gdm/loginDialog.js');
+            if (!LoginDialogMod?.LoginDialog) return;
+
+            const proto = LoginDialogMod.LoginDialog.prototype;
+            if (!proto || this._origLoginDialogLoadUserList) return;
+
+            this._origLoginDialogLoadUserList = proto._loadUserList;
+            const self = this;
+
+            proto._loadUserList = function() {
+                self._origLoginDialogLoadUserList.call(this);
+
+                if (!self._getSettingBool('login-auto-select-single-user', true))
+                    return;
+
+                try {
+                    const checkSingleUser = () => {
+                        if (!this._userList) return;
+                        const users = this._userManager?.list_users() || [];
+                        if (users.length === 1) {
+                            const userName = users[0].get_user_name();
+                            const item = this._userList.getItemFromUserName(userName);
+                            if (item && typeof this._onUserListActivated === 'function') {
+                                this._onUserListActivated(item);
+                            }
+                        }
+                    };
+
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        try {
+                            checkSingleUser();
+                        } catch (e) {}
+                        return GLib.SOURCE_REMOVE;
+                    });
+                } catch (e) {}
+            };
         } catch (e) {}
     }
 
@@ -2082,6 +2173,14 @@ export default class QPatcherExtension extends Extension {
             if (this._origScreenShieldActivate && Main.screenShield) {
                 Main.screenShield.activate = this._origScreenShieldActivate;
                 this._origScreenShieldActivate = null;
+            }
+            if (this._origLoginDialogLoadUserList) {
+                import('resource:///org/gnome/shell/gdm/loginDialog.js').then(LoginDialogMod => {
+                    if (LoginDialogMod?.LoginDialog?.prototype) {
+                        LoginDialogMod.LoginDialog.prototype._loadUserList = this._origLoginDialogLoadUserList;
+                    }
+                }).catch(() => {});
+                this._origLoginDialogLoadUserList = null;
             }
         } catch (e) {}
     }

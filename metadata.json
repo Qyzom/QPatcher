@@ -13,7 +13,8 @@
   ],
   "session-modes": [
     "user",
-    "unlock-dialog"
+    "unlock-dialog",
+    "gdm"
   ],
   "settings-schema": "org.gnome.shell.extensions.qpatcher",
   "gettext-domain": "qpatcher",
