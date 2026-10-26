@@ -1,8 +1,10 @@
+import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import Meta from 'gi://Meta';
+import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -15,6 +17,54 @@ import * as UnlockDialogModule from 'resource:///org/gnome/shell/ui/unlockDialog
 import * as KeyboardStatus from 'resource:///org/gnome/shell/ui/status/keyboard.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { DockManager } from './dock/docking.js';
+
+const TopBarWindowConstraint = GObject.registerClass(
+    { Implements: [Meta.ExternalConstraint] },
+    class TopBarWindowConstraint extends GObject.Object {
+        _init(extension) {
+            super._init();
+            this._extension = extension;
+        }
+
+        vfunc_constrain(window, info) {
+            try {
+                if (!window || !this._extension) return false;
+                if (!this._extension._getSettingBool('panel-visibility', true)) return false;
+
+                const monIndex = window.get_monitor();
+                const targetMon = this._extension._getSettingInt('topbar-monitor');
+                if (monIndex !== targetMon) return false;
+
+                const panelBox = Main.layoutManager?.panelBox;
+                if (!panelBox || !panelBox.visible) return false;
+
+                const monitors = Main.layoutManager?.monitors;
+                if (!monitors || monIndex >= monitors.length) return false;
+                const mon = monitors[monIndex];
+
+                const topBarHeight = panelBox.height || 36;
+                const topBarY = mon.y + topBarHeight;
+                const newRect = info.new_rect;
+
+                if (newRect.y < topBarY) {
+                    const diff = topBarY - newRect.y;
+                    const newH = Math.max(100, newRect.height - diff);
+                    const updatedRect = new Mtk.Rectangle({
+                        x: newRect.x,
+                        y: topBarY,
+                        width: newRect.width,
+                        height: newH,
+                    });
+                    info.set_rect(updatedRect);
+                    return true;
+                }
+            } catch (e) {
+                console.error('[QPatcher] TopBarWindowConstraint error:', e);
+            }
+            return false;
+        }
+    }
+);
 
 export default class QPatcherExtension extends Extension {
     _getUiGroup() {
@@ -720,6 +770,16 @@ export default class QPatcherExtension extends Extension {
         this._setupOsdMonitorPatch();
         this._setupScreenshotCustomizations();
         this._updateLockScreenDateMenu();
+
+        if (!this._origUpdateBoxes && Main.layoutManager?._updateBoxes) {
+            this._origUpdateBoxes = Main.layoutManager._updateBoxes;
+            const self = this;
+            Main.layoutManager._updateBoxes = function() {
+                self._origUpdateBoxes.call(this);
+                self._updatePanelMonitor();
+            };
+        }
+        this._setupWindowConstraints();
 
         // Поэтапные проходы инициализации увеличения дока после перезагрузки
         [400, 1200, 2500, 5000].forEach(delay => {
@@ -1837,15 +1897,85 @@ export default class QPatcherExtension extends Extension {
                 return;
             }
             const targetMonitor = this._getSettingInt('topbar-monitor');
-            const panelBox = Main.layoutManager.panelBox;
+            const panelBox = Main.layoutManager?.panelBox;
             if (!panelBox) return;
 
-            const monitors = Main.layoutManager.monitors;
+            const monitors = Main.layoutManager?.monitors || [];
             if (targetMonitor < monitors.length) {
                 const mon = monitors[targetMonitor];
                 panelBox.set_position(mon.x, mon.y);
                 panelBox.set_size(mon.width, panelBox.height);
+
+                // Поднимаем панель над всеми слоями окон, чтобы окна никогда её не перекрывали
+                const uiGroup = this._getUiGroup();
+                if (uiGroup) {
+                    uiGroup.set_child_above_sibling(panelBox, null);
+                }
+
+                if (Array.isArray(Main.layoutManager._trackedActors)) {
+                    for (const item of Main.layoutManager._trackedActors) {
+                        if (item.actor === panelBox) {
+                            item.affectsStruts = true;
+                            if (this._getSettingBool('topbar-show-in-fullscreen', false)) {
+                                item.trackFullscreen = false;
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                Main.layoutManager._queueUpdateRegions();
             }
+        } catch (e) {
+            console.error('[QPatcher] Error updating panel monitor:', e);
+        }
+    }
+
+    _setupWindowConstraints() {
+        try {
+            if (!this._windowConstraint) {
+                this._windowConstraint = new TopBarWindowConstraint(this);
+            }
+
+            const applyToWindow = (win) => {
+                if (!win || win.is_override_redirect?.()) return;
+                try {
+                    win.add_external_constraint(this._windowConstraint);
+                } catch (e) {}
+            };
+
+            const display = global.display;
+            if (display && !this._windowConstraintConnected) {
+                this._windowConstraintConnected = true;
+                const id = display.connect('window-created', (d, win) => {
+                    applyToWindow(win);
+                });
+                this._signals.push({ obj: display, id });
+
+                if (display.get_tab_list) {
+                    const windows = display.get_tab_list(Meta.TabList.NORMAL_ALL, null) || [];
+                    windows.forEach(applyToWindow);
+                }
+            }
+        } catch (e) {
+            console.error('[QPatcher] Error setting up window constraints:', e);
+        }
+    }
+
+    _removeWindowConstraints() {
+        try {
+            if (!this._windowConstraint) return;
+            const display = global.display;
+            if (display?.get_tab_list) {
+                const windows = display.get_tab_list(Meta.TabList.NORMAL_ALL, null) || [];
+                for (const win of windows) {
+                    try {
+                        win.remove_external_constraint(this._windowConstraint);
+                    } catch (e) {}
+                }
+            }
+            this._windowConstraint = null;
+            this._windowConstraintConnected = false;
         } catch (e) {}
     }
 
@@ -2794,6 +2924,11 @@ export default class QPatcherExtension extends Extension {
         this._restoreScreenShieldPatch();
         this._restoreOsdMonitorPatch();
         this._restoreForceTopBarPatch();
+        if (this._origUpdateBoxes && Main.layoutManager) {
+            Main.layoutManager._updateBoxes = this._origUpdateBoxes;
+            this._origUpdateBoxes = null;
+        }
+        this._removeWindowConstraints();
         this._updateDockVisibilityForSession(false);
         const unlockMode = Main.sessionMode?._modes?.['unlock-dialog'];
         if (unlockMode?.panel?.center) {
