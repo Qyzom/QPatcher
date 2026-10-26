@@ -12,6 +12,7 @@ import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as Layout from 'resource:///org/gnome/shell/ui/layout.js';
 import * as UnlockDialogModule from 'resource:///org/gnome/shell/ui/unlockDialog.js';
+import * as KeyboardStatus from 'resource:///org/gnome/shell/ui/status/keyboard.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { DockManager } from './dock/docking.js';
 
@@ -1968,7 +1969,72 @@ export default class QPatcherExtension extends Extension {
 
     _setupKeyboardManagerHook() {
         try {
+            let inputSourceProto = null;
+            try {
+                if (KeyboardStatus?.InputSource?.prototype) {
+                    inputSourceProto = KeyboardStatus.InputSource.prototype;
+                }
+            } catch (e) {}
+
             const keyboard = Main.panel?.statusArea?.keyboard;
+            const mgr = keyboard?._inputSourceManager;
+            if (!inputSourceProto && mgr?._inputSources) {
+                const sources = Object.values(mgr._inputSources);
+                if (sources.length > 0) {
+                    inputSourceProto = Object.getPrototypeOf(sources[0]);
+                }
+            }
+
+            if (inputSourceProto && !this._origShortNameDesc) {
+                this._origShortNameDesc = Object.getOwnPropertyDescriptor(inputSourceProto, 'shortName');
+                this._inputSourceProto = inputSourceProto;
+                const self = this;
+                Object.defineProperty(inputSourceProto, 'shortName', {
+                    get() {
+                        const val = this._shortName;
+                        if (self._getSettingBool('keyboard-uppercase') && typeof val === 'string') {
+                            return val.toUpperCase();
+                        }
+                        return val;
+                    },
+                    set(v) {
+                        this._shortName = v;
+                        this.emit('changed');
+                    },
+                    configurable: true,
+                    enumerable: true,
+                });
+            }
+
+            if (Main.sessionMode && !this._sessionModeHookConnected) {
+                this._sessionModeHookConnected = true;
+                const id = Main.sessionMode.connect('updated', () => {
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        this._updateKeyboardLayoutText();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                });
+                this._signals.push({ obj: Main.sessionMode, id });
+            }
+
+            if (Main.screenShield && !this._screenShieldHookConnected) {
+                this._screenShieldHookConnected = true;
+                const id1 = Main.screenShield.connect('locked-changed', () => {
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        this._updateKeyboardLayoutText();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                });
+                const id2 = Main.screenShield.connect('active-changed', () => {
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        this._updateKeyboardLayoutText();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                });
+                this._signals.push({ obj: Main.screenShield, id: id1 });
+                this._signals.push({ obj: Main.screenShield, id: id2 });
+            }
+
             if (!keyboard) return;
 
             let patching = false;
@@ -2055,7 +2121,6 @@ export default class QPatcherExtension extends Extension {
                 };
             }
 
-            const mgr = keyboard._inputSourceManager;
             if (mgr) {
                 const id = mgr.connect('current-source-changed', () => {
                     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
@@ -2067,6 +2132,7 @@ export default class QPatcherExtension extends Extension {
             }
 
             patchLabels();
+            this._updateKeyboardLayoutText();
         } catch (e) {}
     }
 
@@ -2074,7 +2140,13 @@ export default class QPatcherExtension extends Extension {
         if (!this._getSettingBool('keyboard-uppercase')) return;
         try {
             const keyboard = Main.panel?.statusArea?.keyboard;
-            if (!keyboard) return;
+            if (keyboard?._inputSourceManager?._inputSources) {
+                for (const is of Object.values(keyboard._inputSourceManager._inputSources)) {
+                    try {
+                        is.emit('changed');
+                    } catch (e) {}
+                }
+            }
 
             const updateActorText = (actor) => {
                 if (!actor || actor.is_finalized?.() || (actor instanceof Clutter.Actor && actor.is_in_destruction?.())) return;
@@ -2093,12 +2165,51 @@ export default class QPatcherExtension extends Extension {
                 } catch (e) {}
             };
 
-            updateActorText(keyboard);
+            if (keyboard) {
+                updateActorText(keyboard);
 
-            if (keyboard._indicatorLabels) {
-                for (const label of Object.values(keyboard._indicatorLabels)) {
-                    updateActorText(label);
+                if (keyboard._indicatorLabels) {
+                    for (const label of Object.values(keyboard._indicatorLabels)) {
+                        updateActorText(label);
+                    }
                 }
+                if (keyboard._menuItems) {
+                    for (const item of Object.values(keyboard._menuItems)) {
+                        if (item?.indicator) updateActorText(item.indicator);
+                    }
+                }
+            }
+
+            const dialog = Main.screenShield?._dialog;
+            if (dialog) {
+                updateActorText(dialog);
+            }
+        } catch (e) {}
+    }
+
+    _restoreKeyboardManagerHook() {
+        try {
+            if (this._origShortNameDesc && this._inputSourceProto) {
+                Object.defineProperty(this._inputSourceProto, 'shortName', this._origShortNameDesc);
+                this._origShortNameDesc = null;
+                this._inputSourceProto = null;
+                if (Main.panel?.statusArea?.keyboard?._inputSourceManager?._inputSources) {
+                    for (const is of Object.values(Main.panel.statusArea.keyboard._inputSourceManager._inputSources)) {
+                        try { is.emit('changed'); } catch (e) {}
+                    }
+                }
+            }
+            if (this._origSetSourceAsActive && Main.panel?.statusArea?.keyboard) {
+                Main.panel.statusArea.keyboard._setSourceAsActive = this._origSetSourceAsActive;
+                this._origSetSourceAsActive = null;
+            }
+            if (this._origCurrentSourceChanged && Main.panel?.statusArea?.keyboard) {
+                Main.panel.statusArea.keyboard._currentSourceChanged = this._origCurrentSourceChanged;
+                this._origCurrentSourceChanged = null;
+            }
+            if (this._origSourcesChanged && Main.panel?.statusArea?.keyboard) {
+                Main.panel.statusArea.keyboard._sourcesChanged = this._origSourcesChanged;
+                this._origSourcesChanged = null;
             }
         } catch (e) {}
     }
@@ -2382,6 +2493,8 @@ export default class QPatcherExtension extends Extension {
                     }
                 });
             }
+
+            this._updateKeyboardLayoutText();
         } catch (e) {
             console.error('[QPatcher] Error applying multi-monitor fix to dialog:', e);
         }
@@ -2673,18 +2786,9 @@ export default class QPatcherExtension extends Extension {
         this._signals = [];
 
         // Восстанавливаем оригинальные методы клавиатуры
-        if (this._origSetSourceAsActive && Main.panel?.statusArea?.keyboard) {
-            Main.panel.statusArea.keyboard._setSourceAsActive = this._origSetSourceAsActive;
-            this._origSetSourceAsActive = null;
-        }
-        if (this._origCurrentSourceChanged && Main.panel?.statusArea?.keyboard) {
-            Main.panel.statusArea.keyboard._currentSourceChanged = this._origCurrentSourceChanged;
-            this._origCurrentSourceChanged = null;
-        }
-        if (this._origSourcesChanged && Main.panel?.statusArea?.keyboard) {
-            Main.panel.statusArea.keyboard._sourcesChanged = this._origSourcesChanged;
-            this._origSourcesChanged = null;
-        }
+        this._restoreKeyboardManagerHook();
+        this._sessionModeHookConnected = false;
+        this._screenShieldHookConnected = false;
 
         this._restoreClassPrototypePatches();
         this._restoreScreenShieldPatch();
