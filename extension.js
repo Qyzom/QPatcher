@@ -173,6 +173,9 @@ export default class QPatcherExtension extends Extension {
         });
         watchKey(this._settings, 'theme-color', () => {
             updatePanelColor();
+            this._updateDateMenuStyle();
+            this._updateQuickSettingsStyle();
+            this._updateNotificationStyle();
             this._updateDynamicThemeStylesheet();
             this._syncDashToDockSettings();
         });
@@ -414,8 +417,14 @@ export default class QPatcherExtension extends Extension {
             }
         });
 
-        watchKey(this._settings, 'datemenu-style', () => this._updateDateMenuStyle());
-        watchKey(this._settings, 'datemenu-opacity', () => this._updateDateMenuStyle());
+        watchKey(this._settings, 'datemenu-style', () => {
+            this._updateDateMenuStyle();
+            this._updateDynamicThemeStylesheet();
+        });
+        watchKey(this._settings, 'datemenu-opacity', () => {
+            this._updateDateMenuStyle();
+            this._updateDynamicThemeStylesheet();
+        });
 
 
         // ==========================================
@@ -505,8 +514,14 @@ export default class QPatcherExtension extends Extension {
             this._applyQuickSettingsFullWidth();
         });
 
-        watchKey(this._settings, 'quicksettings-style', () => this._updateQuickSettingsStyle());
-        watchKey(this._settings, 'quicksettings-opacity', () => this._updateQuickSettingsStyle());
+        watchKey(this._settings, 'quicksettings-style', () => {
+            this._updateQuickSettingsStyle();
+            this._updateDynamicThemeStylesheet();
+        });
+        watchKey(this._settings, 'quicksettings-opacity', () => {
+            this._updateQuickSettingsStyle();
+            this._updateDynamicThemeStylesheet();
+        });
 
 
         watchKey(this._settings, 'screenshot-show-pointer', () => {
@@ -884,65 +899,125 @@ export default class QPatcherExtension extends Extension {
                     -barlevel-active-background-color: ${accentHex} !important;
                 }
 
-                /* Calendar Month Header & Pagers */
-                .calendar .calendar-month-header .pager-button,
-                .qpatcher-menus-theme .calendar .calendar-month-header .pager-button,
-                .qpatcher-recolor-menus .calendar .calendar-month-header .pager-button,
-                .qpatcher-datemenu-theme .calendar .calendar-month-header .pager-button {
-                    background-color: ${cardBg} !important;
+                /* Calendar Days, Weekdays, Week Numbers - Transparent by Default */
+                .calendar .calendar-day,
+                .calendar .calendar-day-base,
+                .calendar .calendar-day-heading,
+                .calendar .calendar-week-number,
+                .qpatcher-datemenu-theme .calendar .calendar-day,
+                .qpatcher-datemenu-theme .calendar .calendar-day-base,
+                .qpatcher-datemenu-theme .calendar .calendar-day-heading,
+                .qpatcher-datemenu-theme .calendar .calendar-week-number,
+                .qpatcher-menus-theme .calendar .calendar-day,
+                .qpatcher-menus-theme .calendar .calendar-day-base,
+                .qpatcher-menus-theme .calendar .calendar-day-heading,
+                .qpatcher-menus-theme .calendar .calendar-week-number,
+                .qpatcher-recolor-menus .calendar .calendar-day,
+                .qpatcher-recolor-menus .calendar .calendar-day-base,
+                .qpatcher-recolor-menus .calendar .calendar-day-heading,
+                .qpatcher-recolor-menus .calendar .calendar-week-number {
+                    background-color: transparent !important;
+                    background: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
                 }
 
-                .calendar .calendar-month-header .pager-button:hover,
-                .qpatcher-menus-theme .calendar .calendar-month-header .pager-button:hover,
-                .qpatcher-recolor-menus .calendar .calendar-month-header .pager-button:hover,
-                .qpatcher-datemenu-theme .calendar .calendar-month-header .pager-button:hover {
+                /* Calendar Day Hover & Active */
+                .calendar .calendar-day:hover,
+                .calendar .calendar-day-base:hover,
+                .qpatcher-datemenu-theme .calendar .calendar-day:hover,
+                .qpatcher-datemenu-theme .calendar .calendar-day-base:hover,
+                .qpatcher-menus-theme .calendar .calendar-day:hover,
+                .qpatcher-menus-theme .calendar .calendar-day-base:hover,
+                .qpatcher-recolor-menus .calendar .calendar-day:hover,
+                .qpatcher-recolor-menus .calendar .calendar-day-base:hover {
                     background-color: ${cardHoverBg} !important;
-                }
-
-                .calendar .calendar-month-header .calendar-month-label,
-                .qpatcher-menus-theme .calendar .calendar-month-header .calendar-month-label,
-                .qpatcher-recolor-menus .calendar .calendar-month-header .calendar-month-label,
-                .qpatcher-datemenu-theme .calendar .calendar-month-header .calendar-month-label {
-                    background-color: ${cardBg} !important;
                     border-radius: 999px !important;
                 }
 
-                /* Calendar Days */
-                .calendar .calendar-day-base:hover,
-                .qpatcher-menus-theme .calendar .calendar-day-base:hover,
-                .qpatcher-recolor-menus .calendar .calendar-day-base:hover,
-                .qpatcher-datemenu-theme .calendar .calendar-day-base:hover {
+                .calendar .calendar-day:selected,
+                .calendar .calendar-day:active,
+                .calendar .calendar-day-base:selected,
+                .calendar .calendar-day-base:active,
+                .qpatcher-datemenu-theme .calendar .calendar-day:selected,
+                .qpatcher-datemenu-theme .calendar .calendar-day:active,
+                .qpatcher-datemenu-theme .calendar .calendar-day-base:selected,
+                .qpatcher-datemenu-theme .calendar .calendar-day-base:active,
+                .qpatcher-menus-theme .calendar .calendar-day:selected,
+                .qpatcher-menus-theme .calendar .calendar-day:active,
+                .qpatcher-menus-theme .calendar .calendar-day-base:selected,
+                .qpatcher-menus-theme .calendar .calendar-day-base:active,
+                .qpatcher-recolor-menus .calendar .calendar-day:selected,
+                .qpatcher-recolor-menus .calendar .calendar-day:active,
+                .qpatcher-recolor-menus .calendar .calendar-day-base:selected,
+                .qpatcher-recolor-menus .calendar .calendar-day-base:active {
+                    background-color: ${cardActiveBg} !important;
+                    border-radius: 999px !important;
+                }
+
+                /* Today Accent Highlight */
+                .calendar .calendar-day.calendar-today,
+                .qpatcher-datemenu-theme .calendar .calendar-day.calendar-today,
+                .qpatcher-menus-theme .calendar .calendar-day.calendar-today,
+                .qpatcher-recolor-menus .calendar .calendar-day.calendar-today {
+                    background-color: ${accentHex} !important;
+                    color: #ffffff !important;
+                    border-radius: 999px !important;
+                }
+
+                /* Calendar Month Header & Pagers */
+                .calendar .calendar-month-header .calendar-month-label,
+                .qpatcher-datemenu-theme .calendar .calendar-month-header .calendar-month-label,
+                .qpatcher-menus-theme .calendar .calendar-month-header .calendar-month-label,
+                .qpatcher-recolor-menus .calendar .calendar-month-header .calendar-month-label {
+                    background-color: transparent !important;
+                    background: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+
+                .calendar .calendar-month-header .pager-button,
+                .qpatcher-datemenu-theme .calendar .calendar-month-header .pager-button,
+                .qpatcher-menus-theme .calendar .calendar-month-header .pager-button,
+                .qpatcher-recolor-menus .calendar .calendar-month-header .pager-button {
+                    background-color: transparent !important;
+                    background: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    border-radius: 999px !important;
+                }
+
+                .calendar .calendar-month-header .pager-button:hover,
+                .qpatcher-datemenu-theme .calendar .calendar-month-header .pager-button:hover,
+                .qpatcher-menus-theme .calendar .calendar-month-header .pager-button:hover,
+                .qpatcher-recolor-menus .calendar .calendar-month-header .pager-button:hover {
                     background-color: ${cardHoverBg} !important;
                 }
 
-                .calendar .calendar-day-base:selected,
-                .qpatcher-menus-theme .calendar .calendar-day-base:selected,
-                .qpatcher-recolor-menus .calendar .calendar-day-base:selected,
-                .qpatcher-datemenu-theme .calendar .calendar-day-base:selected {
+                .calendar .calendar-month-header .pager-button:active,
+                .qpatcher-datemenu-theme .calendar .calendar-month-header .pager-button:active,
+                .qpatcher-menus-theme .calendar .calendar-month-header .pager-button:active,
+                .qpatcher-recolor-menus .calendar .calendar-month-header .pager-button:active {
                     background-color: ${cardActiveBg} !important;
-                }
-
-                .calendar .calendar-day.calendar-today,
-                .qpatcher-menus-theme .calendar .calendar-day.calendar-today,
-                .qpatcher-recolor-menus .calendar .calendar-day.calendar-today,
-                .qpatcher-datemenu-theme .calendar .calendar-day.calendar-today {
-                    background-color: ${accentHex} !important;
-                    color: #ffffff !important;
                 }
 
                 /* Today Button */
                 .datemenu-today-button,
+                .qpatcher-datemenu-theme .datemenu-today-button,
                 .qpatcher-menus-theme .datemenu-today-button,
-                .qpatcher-recolor-menus .datemenu-today-button,
-                .qpatcher-datemenu-theme .datemenu-today-button {
-                    background-color: ${cardBg} !important;
+                .qpatcher-recolor-menus .datemenu-today-button {
+                    background-color: transparent !important;
+                    background: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
                 }
 
                 .datemenu-today-button:hover,
+                .qpatcher-datemenu-theme .datemenu-today-button:hover,
                 .qpatcher-menus-theme .datemenu-today-button:hover,
-                .qpatcher-recolor-menus .datemenu-today-button:hover,
-                .qpatcher-datemenu-theme .datemenu-today-button:hover {
+                .qpatcher-recolor-menus .datemenu-today-button:hover {
                     background-color: ${cardHoverBg} !important;
+                    border-radius: 12px !important;
                 }
 
                 /* World Clocks, Weather, Events Buttons */
@@ -982,6 +1057,7 @@ export default class QPatcherExtension extends Extension {
                 .qpatcher-recolor-menus .message-list-clear-button,
                 .qpatcher-datemenu-theme .message-list-clear-button {
                     background-color: ${cardBg} !important;
+                    color: #ffffff !important;
                 }
 
                 .message-list-clear-button:hover,
@@ -989,6 +1065,49 @@ export default class QPatcherExtension extends Extension {
                 .qpatcher-recolor-menus .message-list-clear-button:hover,
                 .qpatcher-datemenu-theme .message-list-clear-button:hover {
                     background-color: ${cardHoverBg} !important;
+                    color: #ffffff !important;
+                }
+
+                .message-list-clear-button:active,
+                .qpatcher-menus-theme .message-list-clear-button:active,
+                .qpatcher-recolor-menus .message-list-clear-button:active,
+                .qpatcher-datemenu-theme .message-list-clear-button:active {
+                    background-color: ${cardActiveBg} !important;
+                }
+
+                /* Notification cards inside DateMenu */
+                .qpatcher-datemenu-theme .message-list .message,
+                .qpatcher-menus-theme .message-list .message,
+                .qpatcher-recolor-menus .message-list .message {
+                    background-color: ${cardBg} !important;
+                }
+
+                .qpatcher-datemenu-theme .message-list .message:hover,
+                .qpatcher-menus-theme .message-list .message:hover,
+                .qpatcher-recolor-menus .message-list .message:hover {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                /* General buttons in themed dialogs and menus */
+                .qpatcher-recolor-menus .modal-dialog .button,
+                .qpatcher-menus-theme .modal-dialog .button {
+                    background-color: ${cardBg} !important;
+                }
+
+                .qpatcher-recolor-menus .modal-dialog .button:hover,
+                .qpatcher-menus-theme .modal-dialog .button:hover {
+                    background-color: ${cardHoverBg} !important;
+                }
+
+                .qpatcher-recolor-menus .modal-dialog .button:active,
+                .qpatcher-menus-theme .modal-dialog .button:active {
+                    background-color: ${cardActiveBg} !important;
+                }
+
+                .qpatcher-recolor-menus .modal-dialog .button.default,
+                .qpatcher-menus-theme .modal-dialog .button.default {
+                    background-color: ${accentHex} !important;
+                    color: #ffffff !important;
                 }
 
                 /* Submenus in Quick Settings */

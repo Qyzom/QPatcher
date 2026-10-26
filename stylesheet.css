@@ -476,4 +476,58 @@
     opacity: 0 !important;
 }
 
+/* ========================================== */
+/* 10. ШТОРКА И КАЛЕНДАРЬ (DATEMENU & CALENDAR) */
+/* ========================================== */
+
+/* Убираем фоновые кружки/подложки с цифр календаря и дней недели */
+#calendarArea .calendar .calendar-day,
+#calendarArea .calendar .calendar-day-base,
+#calendarArea .calendar .calendar-day-heading,
+#calendarArea .calendar .calendar-week-number,
+.datemenu-calendar-column .calendar .calendar-day,
+.datemenu-calendar-column .calendar .calendar-day-base,
+.datemenu-calendar-column .calendar .calendar-day-heading,
+.datemenu-calendar-column .calendar .calendar-week-number,
+.calendar .calendar-day,
+.calendar .calendar-day-base,
+.calendar .calendar-day-heading,
+.calendar .calendar-week-number {
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Название месяца ("Октябрь 2026") - прозрачный заголовок без кнопки-подложки */
+#calendarArea .calendar .calendar-month-header .calendar-month-label,
+.datemenu-calendar-column .calendar .calendar-month-header .calendar-month-label,
+.calendar .calendar-month-header .calendar-month-label {
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Кнопки переключения месяца (< и >) - плоские прозрачные, только ховер */
+#calendarArea .calendar .calendar-month-header .pager-button,
+.datemenu-calendar-column .calendar .calendar-month-header .pager-button,
+.calendar .calendar-month-header .pager-button {
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 999px !important;
+}
+
+/* Кнопка текущей даты вверху ("Понедельник, 26 октября") - прозрачный заголовок */
+#calendarArea .datemenu-today-button,
+.datemenu-calendar-column .datemenu-today-button,
+.datemenu-today-button {
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
 
