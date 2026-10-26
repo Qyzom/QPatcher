@@ -591,6 +591,14 @@ export default class QPatcherExtension extends Extension {
             })
         });
 
+        if (Main.layoutManager) {
+            const monChangeId = Main.layoutManager.connect('monitors-changed', () => {
+                this._updateNotificationPosition();
+                this._updatePanelMonitor();
+            });
+            this._signals.push({ obj: Main.layoutManager, id: monChangeId });
+        }
+
         // Первичная инициализация всех стилей и эффектов
         updatePanelColor();
         this._updatePanelMonitor();
@@ -1175,6 +1183,7 @@ export default class QPatcherExtension extends Extension {
                 if (origShow) {
                     const self = this;
                     Main.messageTray._showNotification = function() {
+                        self._updateNotificationPosition();
                         const res = origShow.apply(this, arguments);
                         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                             self._updateNotificationStyle();
@@ -1481,14 +1490,19 @@ export default class QPatcherExtension extends Extension {
             const hAlign = this._getSettingString('notification-horizontal-alignment', 'center');
 
             // 1. Позиционирование на мониторе
-            const monIndex = targetMonitor === 0 ? (Main.layoutManager.primaryIndex ?? 0) : targetMonitor - 1;
+            const maxMonIndex = Math.max(0, (Main.layoutManager?.monitors?.length ?? 1) - 1);
+            const isPrimary = targetMonitor === 0;
+            const monIndex = isPrimary
+                ? (Main.layoutManager.primaryIndex ?? 0)
+                : Math.min(Math.max(0, targetMonitor - 1), maxMonIndex);
+
             const constraints = tray.get_constraints ? (tray.get_constraints() || []) : [];
             for (const c of constraints) {
                 if (c && 'index' in c) {
                     c.index = monIndex;
                 }
                 if (c && 'primary' in c) {
-                    c.primary = targetMonitor === 0;
+                    c.primary = isPrimary;
                 }
             }
 
