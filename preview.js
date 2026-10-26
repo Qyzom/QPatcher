@@ -354,6 +354,44 @@ app.connect('activate', () => {
     });
     notifOptionsGroup.add(timeoutRow);
 
+    const osdGroup = new Adw.PreferencesGroup({
+        title: _('Индикаторы громкости и яркости (OSD)'),
+        description: _('Всплывающие плашки при регулировке звука энкодером, клавишами или яркости'),
+    });
+    pageNotifications.add(osdGroup);
+
+    const osdMonitorModel = new Gtk.StringList();
+    osdMonitorModel.append(_('Основной монитор (Primary)'));
+    osdMonitorModel.append(_('На всех мониторах (All Monitors)'));
+    const osdMonitorValues = [0, -1];
+
+    try {
+        const display = Gdk.Display.get_default();
+        if (display) {
+            const monitors = display.get_monitors();
+            for (let i = 0; i < monitors.get_n_items(); i++) {
+                const mon = monitors.get_item(i);
+                const desc = mon.get_description() || mon.get_connector() || `Монитор ${i + 1}`;
+                osdMonitorModel.append(desc);
+                osdMonitorValues.push(i + 1);
+            }
+        }
+    } catch (e) {}
+
+    const currentOsdVal = settings.get_int('osd-monitor');
+    const osdSelectedIdx = osdMonitorValues.indexOf(currentOsdVal);
+
+    const osdMonitorRow = new Adw.ComboRow({
+        title: _('Монитор для индикатора громкости и яркости'),
+        model: osdMonitorModel,
+        selected: osdSelectedIdx >= 0 ? osdSelectedIdx : 0,
+    });
+    osdMonitorRow.connect('notify::selected', () => {
+        const val = osdMonitorValues[osdMonitorRow.selected] ?? 0;
+        settings.set_int('osd-monitor', val);
+    });
+    osdGroup.add(osdMonitorRow);
+
     // ==========================================
     // 5. ШТОРКА (DATEMENU)
     // ==========================================

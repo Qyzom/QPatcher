@@ -368,6 +368,10 @@ export default class QPatcherExtension extends Extension {
             this._updateNotificationPosition();
         });
 
+        watchKey(this._settings, 'osd-monitor', () => {
+            // Checked dynamically in showAll
+        });
+
         watchKey(this._settings, 'notification-close-button-hide', () => {
             toggleClass('qpatcher-no-notification-close', getBool('notification-close-button-hide'));
         });
@@ -698,6 +702,7 @@ export default class QPatcherExtension extends Extension {
         this._setupDockMagnification();
         this._setupScreenShieldPatch();
         this._setupGdmSingleUserAutoSelect();
+        this._setupOsdMonitorPatch();
         this._setupScreenshotCustomizations();
 
         // Поэтапные проходы инициализации увеличения дока после перезагрузки
@@ -1830,6 +1835,56 @@ export default class QPatcherExtension extends Extension {
         } catch (e) {}
     }
 
+    _setupOsdMonitorPatch() {
+        try {
+            if (!Main.osdWindowManager || this._origOsdShowAll) return;
+
+            this._origOsdShowAll = Main.osdWindowManager.showAll;
+            const self = this;
+
+            Main.osdWindowManager.showAll = function(icon, label, level, maxLevel) {
+                const osdMode = self._getSettingInt('osd-monitor', 0);
+
+                // -1: На всех мониторах (поведение GNOME по умолчанию)
+                if (osdMode === -1) {
+                    return self._origOsdShowAll.call(this, icon, label, level, maxLevel);
+                }
+
+                const numMonitors = this._osdWindows?.length ?? 0;
+                if (numMonitors === 0) return;
+
+                let targetIndex = 0;
+                if (osdMode === 0) {
+                    targetIndex = Main.layoutManager?.primaryIndex ?? 0;
+                } else {
+                    targetIndex = Math.min(Math.max(0, osdMode - 1), numMonitors - 1);
+                }
+
+                if (typeof this.showOne === 'function') {
+                    this.showOne(targetIndex, icon, label, level, maxLevel);
+                } else if (this._osdWindows && this._osdWindows[targetIndex]) {
+                    this._showOsdWindow(targetIndex, icon, label, level, maxLevel);
+                    for (let i = 0; i < this._osdWindows.length; i++) {
+                        if (i !== targetIndex && this._osdWindows[i]?.cancel) {
+                            this._osdWindows[i].cancel();
+                        }
+                    }
+                }
+            };
+        } catch (e) {
+            console.error('[QPatcher] Failed to setup OSD monitor patch:', e);
+        }
+    }
+
+    _restoreOsdMonitorPatch() {
+        try {
+            if (this._origOsdShowAll && Main.osdWindowManager) {
+                Main.osdWindowManager.showAll = this._origOsdShowAll;
+                this._origOsdShowAll = null;
+            }
+        } catch (e) {}
+    }
+
     _setupKeyboardManagerHook() {
         try {
             const keyboard = Main.panel?.statusArea?.keyboard;
@@ -2229,6 +2284,7 @@ export default class QPatcherExtension extends Extension {
 
         this._restoreClassPrototypePatches();
         this._restoreScreenShieldPatch();
+        this._restoreOsdMonitorPatch();
         this._destroyOverviewBlur();
 
         const controls = Main.overview?._overview?._controls;
@@ -2449,21 +2505,25 @@ export default class QPatcherExtension extends Extension {
 
         try {
             const soundPlayer = global.display?.get_sound_player();
-            if (soundPlayer && !this._origPlayFromFile) {
-                this._origPlayFromFile = soundPlayer.play_from_file;
-                soundPlayer.play_from_file = function(file, event, cancellable) {
-                    const filePath = file?.get_path ? file.get_path() : '';
-                    if (filePath && filePath.endsWith('screen-capture.oga')) {
-                        const soundMode = self._getSettingString('screenshot-sound', 'bubble');
-                        if (soundMode === 'disabled') {
+            if (soundPlayer) {
+                const proto = Object.getPrototypeOf(soundPlayer);
+                const target = proto?.play_from_file ? proto : soundPlayer;
+                if (!this._origPlayFromFile) {
+                    this._origPlayFromFile = target.play_from_file;
+                    const self = this;
+                    target.play_from_file = function(file, event, cancellable) {
+                        const filePath = file?.get_path ? file.get_path() : '';
+                        if (filePath && (filePath.endsWith('screen-capture.oga') || filePath.endsWith('camera-shutter.oga') || filePath.endsWith('audio-volume-change.oga'))) {
+                            const soundMode = self._getSettingString('screenshot-sound', 'bubble');
+                            if (soundMode === 'disabled')
+                                return;
+
+                            self._playScreenshotSound();
                             return;
-                        } else if (soundMode === 'bubble') {
-                            const bubbleFile = Gio.File.new_for_path('/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga');
-                            return self._origPlayFromFile.call(this, bubbleFile, event, cancellable);
                         }
-                    }
-                    return self._origPlayFromFile.call(this, file, event, cancellable);
-                };
+                        return self._origPlayFromFile.call(this, file, event, cancellable);
+                    };
+                }
             }
         } catch (e) {
             console.warn('[QPatcher] Sound player hook skipped:', e);
@@ -2538,6 +2598,45 @@ export default class QPatcherExtension extends Extension {
         });
     }
 
+    _playScreenshotSound() {
+        try {
+            const soundMode = this._getSettingString('screenshot-sound', 'bubble');
+            if (soundMode === 'disabled')
+                return;
+
+            let soundFile = '/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga';
+            if (soundMode === 'default') {
+                if (GLib.file_test('/usr/share/sounds/freedesktop/stereo/screen-capture.oga', GLib.FileTest.EXISTS)) {
+                    soundFile = '/usr/share/sounds/freedesktop/stereo/screen-capture.oga';
+                } else if (GLib.file_test('/usr/share/sounds/freedesktop/stereo/camera-shutter.oga', GLib.FileTest.EXISTS)) {
+                    soundFile = '/usr/share/sounds/freedesktop/stereo/camera-shutter.oga';
+                } else {
+                    soundFile = `${global.datadir}/sounds/screen-capture.oga`;
+                }
+            }
+
+            if (GLib.file_test(soundFile, GLib.FileTest.EXISTS)) {
+                const player = GLib.find_program_in_path('pw-play') ||
+                               GLib.find_program_in_path('paplay');
+                if (player) {
+                    try {
+                        Gio.Subprocess.new([player, soundFile], Gio.SubprocessFlags.NONE);
+                    } catch (e) {
+                        const file = Gio.File.new_for_path(soundFile);
+                        global.display?.get_sound_player()?.play_from_file(file, 'Screenshot taken', null);
+                    }
+                } else {
+                    try {
+                        const file = Gio.File.new_for_path(soundFile);
+                        global.display?.get_sound_player()?.play_from_file(file, 'Screenshot taken', null);
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {
+            console.error('[QPatcher] Failed to play screenshot sound:', e);
+        }
+    }
+
     async _captureScreenshotCustom(texture, geometry, scale, cursor) {
         const stream = Gio.MemoryOutputStream.new_resizable();
         const texWidth = texture.get_width();
@@ -2582,14 +2681,7 @@ export default class QPatcherExtension extends Extension {
             cursor = { texture: null, x: 0, y: 0, scale: 1 };
         }
 
-        const soundMode = this._getSettingString('screenshot-sound', 'bubble');
-        if (soundMode === 'bubble') {
-            const bubbleFile = Gio.File.new_for_path('/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga');
-            global.display.get_sound_player().play_from_file(bubbleFile, 'Screenshot taken', null);
-        } else if (soundMode === 'default') {
-            const defaultFile = Gio.File.new_for_path(`${global.datadir}/sounds/screen-capture.oga`);
-            global.display.get_sound_player().play_from_file(defaultFile, 'Screenshot taken', null);
-        }
+        this._playScreenshotSound();
 
         const pixbuf = await Shell.Screenshot.composite_to_stream(
             texture,
@@ -2791,6 +2883,9 @@ export default class QPatcherExtension extends Extension {
         try {
             const soundPlayer = global.display?.get_sound_player();
             if (soundPlayer && this._origPlayFromFile) {
+                const proto = Object.getPrototypeOf(soundPlayer);
+                if (proto?.play_from_file)
+                    proto.play_from_file = this._origPlayFromFile;
                 soundPlayer.play_from_file = this._origPlayFromFile;
                 this._origPlayFromFile = null;
             }

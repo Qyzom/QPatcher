@@ -233,6 +233,12 @@
       <description>'center', 'left', 'right'</description>
     </key>
 
+    <key name="osd-monitor" type="i">
+      <default>0</default>
+      <summary>OSD Popup Monitor</summary>
+      <description>Monitor to show volume and brightness OSD popup: 0 for primary monitor, -1 for all monitors, or 1, 2, ... for specific monitor</description>
+    </key>
+
     <key name="notification-style" type="s">
       <default>'theme-grey'</default>
       <summary>Notification Banner Style</summary>
