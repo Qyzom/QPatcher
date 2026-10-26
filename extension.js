@@ -1452,6 +1452,7 @@ export default class QPatcherExtension extends Extension {
                 const span = (shouldExpandLast && i === toggles.length - 1) ? 2 : 1;
                 setSpan(toggle, span);
             }
+            layout.layout_changed?.();
             grid.queue_relayout();
         } catch (e) {}
     }
