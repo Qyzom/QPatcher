@@ -319,6 +319,12 @@
       <description>Expand last lonely toggle to span both columns</description>
     </key>
 
+    <key name="quicksettings-background-apps-full-width" type="b">
+      <default>false</default>
+      <summary>Background Apps Full Width</summary>
+      <description>Display background apps as a full-width bar at the bottom</description>
+    </key>
+
     <key name="qs-power-hide" type="b">
       <default>false</default>
       <summary>Hide Power Button</summary>

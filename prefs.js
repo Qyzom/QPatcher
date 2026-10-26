@@ -400,6 +400,7 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         pageQuickSettings.add(qsLayoutGroup);
 
         addSwitch(qsLayoutGroup, 'Вытягивать нечетную карточку', 'Растягивать последнюю одиночную плитку на 2 колонки', 'quicksettings-full-width-toggle');
+        addSwitch(qsLayoutGroup, 'Фоновые приложения на всю ширину', 'Отображать блок фоновых приложений отдельной широкой строкой снизу вместо плитки в сетке', 'quicksettings-background-apps-full-width');
 
         const qsButtonsGroup = new Adw.PreferencesGroup({
             title: _('Круглые системные кнопки'),

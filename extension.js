@@ -501,6 +501,9 @@ export default class QPatcherExtension extends Extension {
         watchKey(this._settings, 'quicksettings-full-width-toggle', () => {
             this._applyQuickSettingsFullWidth();
         });
+        watchKey(this._settings, 'quicksettings-background-apps-full-width', () => {
+            this._applyQuickSettingsFullWidth();
+        });
 
         watchKey(this._settings, 'quicksettings-style', () => this._updateQuickSettingsStyle());
         watchKey(this._settings, 'quicksettings-opacity', () => this._updateQuickSettingsStyle());
@@ -1403,12 +1406,36 @@ export default class QPatcherExtension extends Extension {
             }
 
             const enabled = this._getSettingBool('quicksettings-full-width-toggle');
+            const bgAppsFullWidth = this._getSettingBool('quicksettings-background-apps-full-width', false);
             const layout = grid.layout_manager;
             if (!layout) return;
+
+            const setSpan = (child, span) => {
+                if (layout.child_set_property) {
+                    try {
+                        layout.child_set_property(grid, child, 'column-span', span);
+                    } catch (e) {}
+                }
+                const meta = layout.get_child_meta ? layout.get_child_meta(grid, child) : null;
+                if (meta) {
+                    meta.columnSpan = span;
+                    meta.column_span = span;
+                }
+            };
 
             const toggles = [];
             for (const child of grid) {
                 if (!child.visible) continue;
+                const isBgApps = child.has_style_class_name?.('background-apps-quick-toggle') ||
+                                 child.constructor?.name === 'BackgroundAppsToggle';
+                if (isBgApps) {
+                    if (bgAppsFullWidth) {
+                        setSpan(child, 2);
+                        continue;
+                    } else {
+                        setSpan(child, 1);
+                    }
+                }
                 const isToggle = child.has_style_class_name?.('quick-toggle') ||
                                  child.has_style_class_name?.('quick-toggle-has-menu') ||
                                  child.constructor?.name?.endsWith('Toggle');
@@ -1423,16 +1450,7 @@ export default class QPatcherExtension extends Extension {
             for (let i = 0; i < toggles.length; i++) {
                 const toggle = toggles[i];
                 const span = (shouldExpandLast && i === toggles.length - 1) ? 2 : 1;
-                if (layout.child_set_property) {
-                    try {
-                        layout.child_set_property(grid, toggle, 'column-span', span);
-                    } catch (e) {}
-                }
-                const meta = layout.get_child_meta ? layout.get_child_meta(grid, toggle) : null;
-                if (meta) {
-                    meta.columnSpan = span;
-                    meta.column_span = span;
-                }
+                setSpan(toggle, span);
             }
             grid.queue_relayout();
         } catch (e) {}
