@@ -111,6 +111,8 @@
     color: transparent !important;
     background-color: transparent !important;
     border-color: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
 }
 
 

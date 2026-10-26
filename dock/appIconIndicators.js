@@ -816,6 +816,15 @@ export class UnityIndicator extends IndicatorBase {
     }
 
     _updateNotificationBadgeStyle() {
+        if (!Docking.DockManager.settings?.showIconsNotificationsCounter) {
+            if (this._notificationBadgeBin) {
+                this._signalsHandler.removeWithLabel(UnityIndicator.notificationBadgeSignals);
+                this._notificationBadgeBin.destroy();
+                this._notificationBadgeBin = null;
+            }
+            return;
+        }
+
         if (!this._notificationBadgeBin?.child)
             return;
 
@@ -909,6 +918,11 @@ export class UnityIndicator extends IndicatorBase {
     _updateNotificationsCount() {
         if (!Docking.DockManager.settings?.showIconsNotificationsCounter) {
             this.setNotificationCount(0);
+            if (this._notificationBadgeBin) {
+                this._signalsHandler.removeWithLabel(UnityIndicator.notificationBadgeSignals);
+                this._notificationBadgeBin.destroy();
+                this._notificationBadgeBin = null;
+            }
             return;
         }
 

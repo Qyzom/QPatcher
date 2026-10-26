@@ -847,6 +847,8 @@ export default class QPatcherExtension extends Extension {
                     color: transparent !important;
                     background-color: transparent !important;
                     border-color: transparent !important;
+                    box-shadow: none !important;
+                    text-shadow: none !important;
                 }
 
                 .app-menu,
@@ -1539,6 +1541,10 @@ export default class QPatcherExtension extends Extension {
                         const icon = item?.child;
                         if (icon?._indicator?._indicators) {
                             icon._indicator._indicators.forEach(ind => {
+                                if (hide && ind._notificationBadgeBin) {
+                                    ind._notificationBadgeBin.destroy();
+                                    ind._notificationBadgeBin = null;
+                                }
                                 if (typeof ind._updateNotificationsCount === 'function') {
                                     ind._updateNotificationsCount();
                                 }
@@ -1548,7 +1554,14 @@ export default class QPatcherExtension extends Extension {
                             icon._iconContainer.get_children().forEach(c => {
                                 if (c?.has_style_class_name?.('notification-badge') ||
                                     c?.child?.has_style_class_name?.('notification-badge')) {
-                                    c.visible = !hide;
+                                    if (hide) {
+                                        c.visible = false;
+                                        c.opacity = 0;
+                                        c.destroy();
+                                    } else {
+                                        c.visible = true;
+                                        c.opacity = 255;
+                                    }
                                 }
                             });
                         }
