@@ -114,13 +114,77 @@ export default class QPatcherPreferences extends ExtensionPreferences {
 
 
         // ==========================================
+        // НАВИГАЦИОННЫЙ САЙДБАР (VERTICAL NAVIGATION)
+        // ==========================================
+        window.set_default_size(960, 680);
+
+        const splitView = new Adw.NavigationSplitView({
+            min_sidebar_width: 230,
+            max_sidebar_width: 290,
+        });
+
+        // Боковая панель (сайдбар)
+        const sidebarPage = new Adw.NavigationPage({
+            title: 'QPatcher',
+            tag: 'sidebar',
+        });
+        const sidebarToolbar = new Adw.ToolbarView();
+        const sidebarHeader = new Adw.HeaderBar();
+        sidebarToolbar.add_top_bar(sidebarHeader);
+
+        const sidebarListBox = new Gtk.ListBox({
+            css_classes: ['navigation-sidebar'],
+            selection_mode: Gtk.SelectionMode.SINGLE,
+        });
+        const sidebarScroll = new Gtk.ScrolledWindow({
+            hscrollbar_policy: Gtk.PolicyType.NEVER,
+            vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+        });
+        sidebarScroll.set_child(sidebarListBox);
+        sidebarToolbar.set_content(sidebarScroll);
+        sidebarPage.set_child(sidebarToolbar);
+        splitView.set_sidebar(sidebarPage);
+
+        // Основная область контента
+        const contentPage = new Adw.NavigationPage({
+            title: _('Топбар'),
+            tag: 'content',
+        });
+        const contentToolbar = new Adw.ToolbarView();
+        const contentHeader = new Adw.HeaderBar();
+        contentToolbar.add_top_bar(contentHeader);
+
+        const stack = new Adw.ViewStack();
+        contentToolbar.set_content(stack);
+        contentPage.set_child(contentToolbar);
+        splitView.set_content(contentPage);
+
+        window.set_content(splitView);
+
+        const addSection = (tag, title, iconName, page) => {
+            stack.add_named(page, tag);
+
+            const row = new Adw.ActionRow({
+                title: _(title),
+                activatable: true,
+            });
+            const img = new Gtk.Image({
+                icon_name: iconName,
+            });
+            row.add_prefix(img);
+            row._tag = tag;
+            sidebarListBox.append(row);
+            return row;
+        };
+
+        // ==========================================
         // 1. ВКЛАДКА: ТОПБАР
         // ==========================================
         const pageTopbar = new Adw.PreferencesPage({
             title: _('Топбар'),
             icon_name: 'preferences-desktop-display-symbolic',
         });
-        window.add(pageTopbar);
+        addSection('topbar', 'Топбар', 'preferences-desktop-display-symbolic', pageTopbar);
 
         const monitorGroup = new Adw.PreferencesGroup({
             title: _('Монитор топбара'),
@@ -188,10 +252,10 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         // 2. ВКЛАДКА: ДОК (DASH & DOCK)
         // ==========================================
         const pageDock = new Adw.PreferencesPage({
-            title: _('Док'),
+            title: _('Док-панель'),
             icon_name: 'view-app-grid-symbolic',
         });
-        window.add(pageDock);
+        addSection('dock', 'Док-панель', 'view-app-grid-symbolic', pageDock);
 
         const dockFeaturesGroup = new Adw.PreferencesGroup({
             title: _('Элементы и поведение дока'),
@@ -249,10 +313,10 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         // 3. ВКЛАДКА: ОБЗОР (OVERVIEW)
         // ==========================================
         const pageOverview = new Adw.PreferencesPage({
-            title: _('Обзор'),
+            title: _('Овервью и окна'),
             icon_name: 'view-grid-symbolic',
         });
-        window.add(pageOverview);
+        addSection('overview', 'Овервью и окна', 'view-grid-symbolic', pageOverview);
 
         const overviewStyleGroup = new Adw.PreferencesGroup({
             title: _('Фон режима обзора (Overview)'),
@@ -279,10 +343,10 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         // 4. ВКЛАДКА: УВЕДОМЛЕНИЯ (NOTIFICATIONS)
         // ==========================================
         const pageNotifications = new Adw.PreferencesPage({
-            title: _('Уведомления'),
+            title: _('Уведомления и OSD'),
             icon_name: 'preferences-system-notifications-symbolic',
         });
-        window.add(pageNotifications);
+        addSection('notifications', 'Уведомления и OSD', 'preferences-system-notifications-symbolic', pageNotifications);
 
         const notifPositionGroup = new Adw.PreferencesGroup({
             title: _('Расположение всплывающих уведомлений'),
@@ -398,10 +462,10 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         // 5. ШТОРКА (DATEMENU)
         // ==========================================
         const pageDateMenu = new Adw.PreferencesPage({
-            title: _('Шторка'),
+            title: _('Календарь и часы'),
             icon_name: 'x-office-calendar-symbolic',
         });
-        window.add(pageDateMenu);
+        addSection('datemenu', 'Календарь и часы', 'x-office-calendar-symbolic', pageDateMenu);
 
         const calendarGroup = new Adw.PreferencesGroup({
             title: _('Календарь и секции шторки'),
@@ -429,9 +493,9 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         // ==========================================
         const pageQuickSettings = new Adw.PreferencesPage({
             title: _('Быстрые настройки'),
-            icon_name: 'preferences-system-symbolic',
+            icon_name: 'emblem-system-symbolic',
         });
-        window.add(pageQuickSettings);
+        addSection('quicksettings', 'Быстрые настройки', 'emblem-system-symbolic', pageQuickSettings);
 
         const qsLayoutGroup = new Adw.PreferencesGroup({
             title: _('Компоновка плиток'),
@@ -466,9 +530,9 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         // ==========================================
         const pageScreenshots = new Adw.PreferencesPage({
             title: _('Скриншоты'),
-            icon_name: 'camera-photo-symbolic',
+            icon_name: 'applets-screenshooter-symbolic',
         });
-        window.add(pageScreenshots);
+        addSection('screenshots', 'Скриншоты', 'applets-screenshooter-symbolic', pageScreenshots);
 
         const screenshotNamingGroup = new Adw.PreferencesGroup({
             title: _('Имя и сохранение файлов'),
@@ -550,7 +614,7 @@ export default class QPatcherPreferences extends ExtensionPreferences {
             title: _('Буфер и Эмодзи'),
             icon_name: 'edit-paste-symbolic',
         });
-        window.add(pageClipboard);
+        addSection('clipboard', 'Буфер и эмодзи', 'edit-paste-symbolic', pageClipboard);
 
         const clipboardGroup = new Adw.PreferencesGroup({
             title: _('Буфер обмена и Эмодзи'),
@@ -603,10 +667,10 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         // 9. ВКЛАДКА: ПРОЧЕЕ (SYSTEM & THEME)
         // ==========================================
         const pageOther = new Adw.PreferencesPage({
-            title: _('Прочее'),
+            title: _('Внешний вид и система'),
             icon_name: 'preferences-other-symbolic',
         });
-        window.add(pageOther);
+        addSection('other', 'Внешний вид и система', 'preferences-other-symbolic', pageOther);
 
         const themeColorGroup = new Adw.PreferencesGroup({
             title: _('Единый цвет темы (Theme Color)'),
@@ -732,5 +796,18 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         addSwitch(lockGroup, 'Сразу открывать ввод пароля (без шторы часов)', 'Автоматически пропускает экран с часами на локскрине и сразу активирует поле ввода', 'lockscreen-auto-focus-password');
         addSwitch(lockGroup, 'Автовыбор единственного пользователя', 'Если в системе один пользователь — не требовать кликать по нему, а сразу запрашивать пароль', 'login-auto-select-single-user');
         addSwitch(lockGroup, 'Не тушить экран при блокировке (Win+L)', 'Оставляет экран блокировки с часами и обоями включенным, не выключая мониторы', 'lockscreen-prevent-blank');
+
+        // Обработка переключения разделов сайдбара
+        sidebarListBox.connect('row-selected', (_box, row) => {
+            if (row && row._tag) {
+                stack.set_visible_child_name(row._tag);
+                contentPage.set_title(row.get_title());
+            }
+        });
+
+        const firstRow = sidebarListBox.get_row_at_index(0);
+        if (firstRow) {
+            sidebarListBox.select_row(firstRow);
+        }
     }
 }
