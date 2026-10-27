@@ -585,13 +585,13 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             });
 
             this._btnTabClipboard = new St.Button({
-                label: '📋 Буфер обмена',
+                label: 'Буфер',
                 style_class: 'qpatcher-tab-button active',
                 x_expand: true,
                 can_focus: true,
             });
             this._btnTabEmoji = new St.Button({
-                label: '😊 Эмодзи',
+                label: 'Эмодзи',
                 style_class: 'qpatcher-tab-button',
                 x_expand: true,
                 can_focus: true,
@@ -932,14 +932,12 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 return false;
             };
 
-            const visiblePinned = pinned.filter(filterFn);
-            const visibleHistory = history.filter(filterFn);
-
+            const allItems = [...pinned, ...history].filter(filterFn);
             const totalCount = pinned.length + history.length;
             const maxLimit = this._clipboardManager.getLimit();
             this._clipboardCountLabel.set_text(`Записей: ${totalCount} (лимит: ${maxLimit})`);
 
-            if (visiblePinned.length === 0 && visibleHistory.length === 0) {
+            if (allItems.length === 0) {
                 const emptyLabel = new St.Label({
                     text: query ? 'Ничего не найдено' : 'История буфера обмена пуста',
                     style_class: 'qpatcher-empty-label',
@@ -952,36 +950,14 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 return;
             }
 
-            if (visiblePinned.length > 0) {
-                const pinnedHeader = new St.Label({
-                    text: 'ЗАКРЕПЛЁННЫЕ',
-                    style_class: 'qpatcher-section-header',
-                });
-                this._clipboardList.add_child(pinnedHeader);
-
-                for (const item of visiblePinned) {
-                    this._clipboardList.add_child(this._createHistoryRow(item, true));
-                }
-            }
-
-            if (visibleHistory.length > 0) {
-                if (visiblePinned.length > 0) {
-                    const histHeader = new St.Label({
-                        text: 'ИСТОРИЯ',
-                        style_class: 'qpatcher-section-header',
-                    });
-                    this._clipboardList.add_child(histHeader);
-                }
-
-                for (const item of visibleHistory) {
-                    this._clipboardList.add_child(this._createHistoryRow(item, false));
-                }
+            for (const item of allItems) {
+                this._clipboardList.add_child(this._createHistoryRow(item));
             }
         }
 
-        _createHistoryRow(item, isPinned) {
+        _createHistoryRow(item) {
             const row = new St.Button({
-                style_class: `qpatcher-history-row ${isPinned ? 'is-pinned' : ''}`,
+                style_class: 'qpatcher-history-row',
                 x_expand: true,
                 reactive: true,
                 can_focus: true,
@@ -990,6 +966,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             const rowContent = new St.BoxLayout({
                 orientation: Clutter.Orientation.HORIZONTAL,
                 x_expand: true,
+                y_align: Clutter.ActorAlign.CENTER,
                 style_class: 'qpatcher-history-row-content',
             });
 
@@ -1024,6 +1001,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             const detailsBox = new St.BoxLayout({
                 orientation: Clutter.Orientation.VERTICAL,
                 x_expand: true,
+                y_align: Clutter.ActorAlign.CENTER,
                 style_class: 'qpatcher-item-details',
             });
 
@@ -1044,26 +1022,18 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             detailsBox.add_child(timeLabel);
             rowContent.add_child(detailsBox);
 
-            // Actions on right
+            // Actions on right: only the trash button, centered vertically
             const actionsBox = new St.BoxLayout({
                 orientation: Clutter.Orientation.HORIZONTAL,
                 style_class: 'qpatcher-item-actions',
-            });
-
-            const pinBtn = new St.Button({
-                style_class: `qpatcher-row-action-btn ${isPinned ? 'pinned' : ''}`,
-                child: new St.Icon({
-                    icon_name: isPinned ? 'starred-symbolic' : 'non-starred-symbolic',
-                    icon_size: 16,
-                }),
-            });
-            pinBtn.connect('clicked', () => {
-                this._clipboardManager.togglePin(item);
-                this._refreshClipboardList();
+                y_align: Clutter.ActorAlign.CENTER,
             });
 
             const deleteBtn = new St.Button({
                 style_class: 'qpatcher-row-action-btn delete',
+                y_align: Clutter.ActorAlign.CENTER,
+                x_align: Clutter.ActorAlign.CENTER,
+                can_focus: true,
                 child: new St.Icon({
                     icon_name: 'user-trash-symbolic',
                     icon_size: 16,
@@ -1074,7 +1044,6 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 this._refreshClipboardList();
             });
 
-            actionsBox.add_child(pinBtn);
             actionsBox.add_child(deleteBtn);
             rowContent.add_child(actionsBox);
 
