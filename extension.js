@@ -33,6 +33,24 @@ const TopBarWindowConstraint = GObject.registerClass(
                 if (!window || !this._extension) return false;
                 if (!this._extension._getSettingBool('panel-visibility', true)) return false;
 
+                // Не искажаем полноэкранные окна (игры во весь экран, видеоплееры)
+                if (window.is_fullscreen?.() || window.fullscreen) return false;
+
+                // Не искажаем игры (Dota 2, Steam, CS2, Wine, Proton, Gamescope)
+                const wmClass = (window.get_wm_class?.() || '').toLowerCase();
+                const wmName = (window.get_title?.() || '').toLowerCase();
+                if (wmClass.includes('dota') || wmClass.includes('steam_app') ||
+                    wmClass.includes('cs2') || wmClass.includes('gamescope') ||
+                    wmClass.includes('wine') || wmClass.includes('proton') ||
+                    wmName.includes('dota 2')) {
+                    return false;
+                }
+
+                // Не искажаем окна без рамок на весь экран (игры в режиме "в окне без рамки" / Borderless Fullscreen)
+                if (!window.decorated && (window.is_maximized_both?.() || window.maximized_vertically)) {
+                    return false;
+                }
+
                 const monIndex = window.get_monitor();
                 const targetMon = this._extension._getTargetTopbarMonitorIndex();
                 if (monIndex !== targetMon) return false;
@@ -47,6 +65,11 @@ const TopBarWindowConstraint = GObject.registerClass(
                 const topBarHeight = panelBox.height || 36;
                 const topBarY = mon.y + topBarHeight;
                 const newRect = info.new_rect;
+
+                // Если окно без рамок занимает почти весь экран (игры в borderless)
+                if (!window.decorated && newRect.width >= mon.width && newRect.height >= (mon.height - topBarHeight - 10)) {
+                    return false;
+                }
 
                 if (newRect.y < topBarY) {
                     const diff = topBarY - newRect.y;
@@ -2454,6 +2477,16 @@ export default class QPatcherExtension extends Extension {
                 Main.layoutManager._updateVisibility = function() {
                     self._origLayoutUpdateVisibility.call(this);
                     if (self._getSettingBool('topbar-show-in-fullscreen', false)) {
+                        const focusWin = global.display?.focus_window;
+                        if (focusWin) {
+                            const wmClass = (focusWin.get_wm_class?.() || '').toLowerCase();
+                            const isGame = wmClass.includes('dota') || wmClass.includes('steam_app') ||
+                                           wmClass.includes('cs2') || wmClass.includes('gamescope') ||
+                                           wmClass.includes('wine') || wmClass.includes('proton');
+                            if (focusWin.is_fullscreen?.() || focusWin.fullscreen || isGame) {
+                                return;
+                            }
+                        }
                         if (panelBox) {
                             panelBox.visible = true;
                             panelBox.translation_y = 0;
