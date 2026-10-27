@@ -537,8 +537,6 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             this._extension = extension;
             this._clipboardManager = clipboardManager;
             this._emojiManager = emojiManager;
-            this._currentTab = 'clipboard';
-            this._currentEmojiCategory = 'smileys';
             this._activeQuery = '';
 
             const icon = new St.Icon({
@@ -561,8 +559,8 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
 
             this._mainBox = new St.BoxLayout({
                 orientation: Clutter.Orientation.VERTICAL,
-                width: 520,
-                height: 520,
+                width: 420,
+                height: 460,
                 style_class: 'qpatcher-clipboard-popup',
                 reactive: true,
                 can_focus: false,
@@ -580,11 +578,11 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 style_class: 'qpatcher-search-entry',
                 can_focus: true,
                 x_expand: true,
-                hint_text: 'Поиск...',
+                hint_text: 'Поиск в истории...',
             });
 
             const searchIcon = new St.Icon({
-                icon_name: 'system-search-symbolic',
+                icon_name: 'edit-find-symbolic',
                 style_class: 'qpatcher-search-icon',
             });
             this._searchEntry.set_primary_icon(searchIcon);
@@ -611,7 +609,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
 
             this._searchEntry.clutter_text.connect('text-changed', () => {
                 this._activeQuery = this._searchEntry.get_text() || '';
-                this._onSearchChanged();
+                this._refreshClipboardList();
             });
 
             const closeBtn = new St.Button({
@@ -627,47 +625,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             headerBox.add_child(closeBtn);
             this._mainBox.add_child(headerBox);
 
-            // Tab bar
-            const tabBox = new St.BoxLayout({
-                style_class: 'qpatcher-tabs-bar',
-                orientation: Clutter.Orientation.HORIZONTAL,
-                x_expand: true,
-            });
-
-            this._btnTabClipboard = new St.Button({
-                label: '📋 Буфер обмена',
-                style_class: 'qpatcher-tab-button active',
-                x_expand: true,
-            });
-            this._btnTabClipboard.connect('clicked', () => this.switchTab('clipboard'));
-
-            this._btnTabEmoji = new St.Button({
-                label: '😊 Эмодзи',
-                style_class: 'qpatcher-tab-button',
-                x_expand: true,
-            });
-            this._btnTabEmoji.connect('clicked', () => this.switchTab('emoji'));
-
-            tabBox.add_child(this._btnTabClipboard);
-            tabBox.add_child(this._btnTabEmoji);
-            this._mainBox.add_child(tabBox);
-
-            // Body container
-            this._bodyBox = new St.BoxLayout({
-                style_class: 'qpatcher-body-box',
-                orientation: Clutter.Orientation.VERTICAL,
-                x_expand: true,
-                y_expand: true,
-            });
-            this._mainBox.add_child(this._bodyBox);
-
-            // Tab 1: Clipboard View
-            this._clipboardView = new St.BoxLayout({
-                orientation: Clutter.Orientation.VERTICAL,
-                x_expand: true,
-                y_expand: true,
-            });
-
+            // Body: Scrollable list of clipboard items
             this._clipboardScrollView = new St.ScrollView({
                 style_class: 'qpatcher-scroll-view',
                 x_expand: true,
@@ -680,9 +638,9 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 style_class: 'qpatcher-items-list',
             });
             this._clipboardScrollView.add_child(this._clipboardList);
-            this._clipboardView.add_child(this._clipboardScrollView);
+            this._mainBox.add_child(this._clipboardScrollView);
 
-            // Clipboard footer
+            // Footer: Counter + Clear All
             const clipFooter = new St.BoxLayout({
                 style_class: 'qpatcher-footer-bar',
                 orientation: Clutter.Orientation.HORIZONTAL,
@@ -705,66 +663,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
 
             clipFooter.add_child(this._clipboardCountLabel);
             clipFooter.add_child(clearBtn);
-            this._clipboardView.add_child(clipFooter);
-
-            // Tab 2: Emoji View
-            this._emojiView = new St.BoxLayout({
-                orientation: Clutter.Orientation.VERTICAL,
-                x_expand: true,
-                y_expand: true,
-            });
-
-            // Category pills bar in horizontal scroll view
-            this._categoryScrollView = new St.ScrollView({
-                style_class: 'qpatcher-category-scroll',
-                vscrollbar_policy: St.PolicyType.NEVER,
-                hscrollbar_policy: St.PolicyType.AUTOMATIC,
-                x_expand: true,
-                overlay_scrollbars: true,
-            });
-            this._emojiCategoryBar = new St.BoxLayout({
-                style_class: 'qpatcher-category-bar',
-                orientation: Clutter.Orientation.HORIZONTAL,
-                x_expand: true,
-            });
-            this._categoryScrollView.add_child(this._emojiCategoryBar);
-            this._categoryButtons = [];
-            const cats = this._emojiManager.getCategoryList();
-            for (const cat of cats) {
-                const btn = new St.Button({
-                    label: `${cat.icon} ${cat.label}`,
-                    style_class: 'qpatcher-category-pill',
-                });
-                btn.connect('clicked', () => {
-                    this._currentEmojiCategory = cat.id;
-                    this._searchEntry.set_text('');
-                    this._updateCategoryButtons();
-                    this._refreshEmojiGrid();
-                });
-                btn._catId = cat.id;
-                this._categoryButtons.push(btn);
-                this._emojiCategoryBar.add_child(btn);
-            }
-            this._emojiView.add_child(this._categoryScrollView);
-
-            // Emoji grid container
-            this._emojiScrollView = new St.ScrollView({
-                style_class: 'qpatcher-scroll-view',
-                x_expand: true,
-                y_expand: true,
-                overlay_scrollbars: true,
-            });
-            this._emojiListBox = new St.BoxLayout({
-                orientation: Clutter.Orientation.VERTICAL,
-                x_expand: true,
-                style_class: 'qpatcher-emoji-list-box',
-            });
-            this._emojiScrollView.add_child(this._emojiListBox);
-            this._emojiView.add_child(this._emojiScrollView);
-
-            // Initial view
-            this._bodyBox.add_child(this._clipboardView);
-            this._updateCategoryButtons();
+            this._mainBox.add_child(clipFooter);
         }
 
         close() {
@@ -774,72 +673,22 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
         _onMenuOpened() {
             this._searchEntry.set_text('');
             this._activeQuery = '';
-            if (this._currentTab === 'clipboard') {
-                this._refreshClipboardList();
-            } else {
-                this._refreshEmojiGrid();
-            }
+            this._refreshClipboardList();
             GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
                 this._searchEntry.grab_key_focus();
                 return GLib.SOURCE_REMOVE;
             });
         }
 
-        switchTab(tabName) {
-            this._currentTab = tabName;
+        switchTab(_tabName = 'clipboard') {
             this._searchEntry.set_text('');
             this._activeQuery = '';
-
-            if (tabName === 'clipboard') {
-                this._btnTabClipboard.add_style_class_name('active');
-                this._btnTabEmoji.remove_style_class_name('active');
-                this._searchEntry.set_hint_text('Поиск в истории буфера...');
-                if (this._emojiView.get_parent() === this._bodyBox) {
-                    this._bodyBox.remove_child(this._emojiView);
-                }
-                if (this._clipboardView.get_parent() !== this._bodyBox) {
-                    this._bodyBox.add_child(this._clipboardView);
-                }
-                this._refreshClipboardList();
-            } else {
-                this._btnTabEmoji.add_style_class_name('active');
-                this._btnTabClipboard.remove_style_class_name('active');
-                this._searchEntry.set_hint_text('Поиск эмодзи (на русском или английском)...');
-                if (this._clipboardView.get_parent() === this._bodyBox) {
-                    this._bodyBox.remove_child(this._clipboardView);
-                }
-                if (this._emojiView.get_parent() !== this._bodyBox) {
-                    this._bodyBox.add_child(this._emojiView);
-                }
-                this._updateCategoryButtons();
-                this._refreshEmojiGrid();
-            }
-
+            this._refreshClipboardList();
             this._searchEntry.grab_key_focus();
         }
 
-        _updateCategoryButtons() {
-            for (const btn of this._categoryButtons) {
-                if (btn._catId === this._currentEmojiCategory) {
-                    btn.add_style_class_name('active');
-                } else {
-                    btn.remove_style_class_name('active');
-                }
-            }
-        }
-
-        _onSearchChanged() {
-            if (this._currentTab === 'clipboard') {
-                this._refreshClipboardList();
-            } else {
-                this._refreshEmojiGrid();
-            }
-        }
-
         onHistoryUpdated() {
-            if (this._currentTab === 'clipboard') {
-                this._refreshClipboardList();
-            }
+            this._refreshClipboardList();
         }
 
         _refreshClipboardList() {
@@ -1019,72 +868,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             return row;
         }
 
-        _refreshEmojiGrid() {
-            this._emojiListBox.destroy_all_children();
-
-            let emojis = [];
-            const query = this._activeQuery.trim();
-            if (query) {
-                emojis = this._emojiManager.search(query) || [];
-                this._categoryScrollView.visible = false;
-            } else {
-                this._categoryScrollView.visible = true;
-                emojis = this._emojiManager.getEmojisForCategory(this._currentEmojiCategory) || [];
-            }
-
-            if (emojis.length === 0) {
-                const emptyLabel = new St.Label({
-                    text: query ? 'Эмодзи не найдены' : 'Список пуст',
-                    style_class: 'qpatcher-empty-label',
-                    x_align: Clutter.ActorAlign.CENTER,
-                    y_align: Clutter.ActorAlign.CENTER,
-                });
-                this._emojiListBox.add_child(emptyLabel);
-                return;
-            }
-
-            // Exactly 12 columns: zero leftover holes, homogeneous spacing
-            const COLUMNS = 12;
-            let currentRow = null;
-            emojis.forEach((em, idx) => {
-                if (idx % COLUMNS === 0) {
-                    currentRow = new St.BoxLayout({
-                        orientation: Clutter.Orientation.HORIZONTAL,
-                        x_expand: true,
-                        style_class: 'qpatcher-emoji-row',
-                    });
-                    this._emojiListBox.add_child(currentRow);
-                }
-
-                const btn = new St.Button({
-                    style_class: 'qpatcher-emoji-btn',
-                    x_expand: true,
-                    child: new St.Label({
-                        text: em.char,
-                        style_class: 'qpatcher-emoji-char',
-                    }),
-                    can_focus: true,
-                });
-
-                btn.connect('clicked', () => {
-                    const clipboard = St.Clipboard.get_default();
-                    clipboard.set_text(St.ClipboardType.CLIPBOARD, em.char);
-                    clipboard.set_text(St.ClipboardType.PRIMARY, em.char);
-
-                    this._emojiManager.recordRecent(em);
-                    this.close();
-
-                    const autoPaste = this._extension._getSettingBool('clipboard-auto-paste', true);
-                    if (autoPaste) {
-                        triggerAutoPaste();
-                    }
-                });
-
-                currentRow.add_child(btn);
-            });
-        }
-
-        openTab(initialTab = 'clipboard') {
+        openTab(_initialTab = 'clipboard') {
             const enabled = this._extension._getSettingBool('clipboard-enable', true);
             if (!enabled) return false;
 
@@ -1092,7 +876,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 this.visible = true;
             }
 
-            this.switchTab(initialTab);
+            this.switchTab('clipboard');
             if (!this.menu.isOpen) {
                 this.menu.open();
             }

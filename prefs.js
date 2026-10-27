@@ -95,8 +95,8 @@ export default class QPatcherPreferences extends ExtensionPreferences {
 
         const addStyleCombo = (group, title, schemaKey) => {
             const model = new Gtk.StringList();
-            model.append(_('По умолчанию (GNOME Default)'));
-            model.append(_('В цвет темы / Прозрачность'));
+            model.append(_('По умолчанию'));
+            model.append(_('Цвет темы / Прозрачность'));
 
             const styles = ['default', 'theme-grey'];
             const current = settings.get_string(schemaKey);
@@ -110,6 +110,40 @@ export default class QPatcherPreferences extends ExtensionPreferences {
             });
             group.add(row);
             return row;
+        };
+
+        const getMonitorNames = () => {
+            const list = [];
+            try {
+                const homeDir = GLib.get_home_dir();
+                const xmlPath = `${homeDir}/.config/monitors.xml`;
+                const file = Gio.File.new_for_path(xmlPath);
+                if (file.query_exists(null)) {
+                    const [, content] = GLib.file_get_contents(xmlPath);
+                    const text = new TextDecoder('utf-8').decode(content);
+                    const regex = /<logicalmonitor>[\s\S]*?<connector>([^<]+)<\/connector>([\s\S]*?)<\/logicalmonitor>/g;
+                    let match;
+                    let idx = 1;
+                    while ((match = regex.exec(text)) !== null) {
+                        const conn = match[1];
+                        const isPrimary = match[2].includes('<primary>yes</primary>');
+                        list.push(`Монитор ${idx} (${conn}${isPrimary ? ', Основной' : ''})`);
+                        idx++;
+                    }
+                }
+            } catch (_) {}
+
+            if (list.length === 0) {
+                try {
+                    const display = Gdk.Display.get_default();
+                    const monitors = display?.get_monitors();
+                    const count = monitors ? monitors.get_n_items() : 0;
+                    for (let i = 0; i < count; i++) {
+                        list.push(`Монитор ${i + 1}`);
+                    }
+                } catch (_) {}
+            }
+            return list;
         };
 
 
@@ -193,24 +227,14 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         pageTopbar.add(monitorGroup);
 
         const monitorModel = new Gtk.StringList();
-        monitorModel.append(_('Основной монитор (Primary)'));
-        try {
-            const display = Gdk.Display.get_default();
-            if (display) {
-                const monitors = display.get_monitors();
-                for (let i = 0; i < monitors.get_n_items(); i++) {
-                    const mon = monitors.get_item(i);
-                    const desc = mon.get_description() || mon.get_connector() || `Монитор ${i + 1}`;
-                    const connector = mon.get_connector() ? ` (${mon.get_connector()})` : '';
-                    monitorModel.append(`${desc}${connector}`);
-                }
-            }
-        } catch (e) {}
+        monitorModel.append(_('Основной экран'));
+        const detectedMons = getMonitorNames();
+        detectedMons.forEach(m => monitorModel.append(m));
 
         const monitorRow = new Adw.ComboRow({
             title: _('Дисплей для панели'),
             model: monitorModel,
-            selected: settings.get_int('topbar-monitor'),
+            selected: Math.min(settings.get_int('topbar-monitor'), monitorModel.get_n_items() - 1),
         });
         monitorRow.connect('notify::selected', () => {
             settings.set_int('topbar-monitor', monitorRow.selected);
@@ -315,15 +339,14 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         pageDock.add(dockMonitorGroup);
 
         const dockMonitorModel = new Gtk.StringList();
-        dockMonitorModel.append(_('Следовать за верхней панелью'));
-        dockMonitorModel.append(_('Монитор 1 (DP-2)'));
-        dockMonitorModel.append(_('Монитор 2 (DP-1)'));
-        dockMonitorModel.append(_('Отображать на всех мониторах'));
+        dockMonitorModel.append(_('Как у верхней панели'));
+        detectedMons.forEach(m => dockMonitorModel.append(m));
+        dockMonitorModel.append(_('На всех экранах'));
 
         const dockMonitorRow = new Adw.ComboRow({
             title: _('Расположение дока'),
             model: dockMonitorModel,
-            selected: settings.get_int('dock-monitor'),
+            selected: Math.min(settings.get_int('dock-monitor'), dockMonitorModel.get_n_items() - 1),
         });
         dockMonitorRow.connect('notify::selected', () => {
             settings.set_int('dock-monitor', dockMonitorRow.selected);
@@ -377,23 +400,13 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         pageNotifications.add(notifPositionGroup);
 
         const notifMonitorModel = new Gtk.StringList();
-        notifMonitorModel.append(_('Основной монитор (Primary)'));
-        try {
-            const display = Gdk.Display.get_default();
-            if (display) {
-                const monitors = display.get_monitors();
-                for (let i = 0; i < monitors.get_n_items(); i++) {
-                    const mon = monitors.get_item(i);
-                    const desc = mon.get_description() || mon.get_connector() || `Монитор ${i + 1}`;
-                    notifMonitorModel.append(desc);
-                }
-            }
-        } catch (e) {}
+        notifMonitorModel.append(_('Основной экран'));
+        detectedMons.forEach(m => notifMonitorModel.append(m));
 
         const notifMonitorRow = new Adw.ComboRow({
-            title: _('Монитор для всплывающих баннеров'),
+            title: _('Монитор для баннеров'),
             model: notifMonitorModel,
-            selected: settings.get_int('notification-monitor'),
+            selected: Math.min(settings.get_int('notification-monitor'), notifMonitorModel.get_n_items() - 1),
         });
         notifMonitorRow.connect('notify::selected', () => {
             settings.set_int('notification-monitor', notifMonitorRow.selected);
@@ -401,9 +414,9 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         notifPositionGroup.add(notifMonitorRow);
 
         const hAlignModel = new Gtk.StringList();
-        hAlignModel.append(_('По центру (Center)'));
-        hAlignModel.append(_('Слева (Left)'));
-        hAlignModel.append(_('Справа (Right)'));
+        hAlignModel.append(_('По центру'));
+        hAlignModel.append(_('Слева'));
+        hAlignModel.append(_('Справа'));
         const hAlignValues = ['center', 'left', 'right'];
 
         const hAlignRow = new Adw.ComboRow({
@@ -448,22 +461,14 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         pageNotifications.add(osdGroup);
 
         const osdMonitorModel = new Gtk.StringList();
-        osdMonitorModel.append(_('Основной монитор (Primary)'));
-        osdMonitorModel.append(_('На всех мониторах (All Monitors)'));
+        osdMonitorModel.append(_('Основной экран'));
+        osdMonitorModel.append(_('На всех экранах'));
         const osdMonitorValues = [0, -1];
 
-        try {
-            const display = Gdk.Display.get_default();
-            if (display) {
-                const monitors = display.get_monitors();
-                for (let i = 0; i < monitors.get_n_items(); i++) {
-                    const mon = monitors.get_item(i);
-                    const desc = mon.get_description() || mon.get_connector() || `Монитор ${i + 1}`;
-                    osdMonitorModel.append(desc);
-                    osdMonitorValues.push(i + 1);
-                }
-            }
-        } catch (e) {}
+        detectedMons.forEach((m, idx) => {
+            osdMonitorModel.append(m);
+            osdMonitorValues.push(idx + 1);
+        });
 
         const currentOsdVal = settings.get_int('osd-monitor');
         const osdSelectedIdx = osdMonitorValues.indexOf(currentOsdVal);
@@ -495,11 +500,20 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         });
         pageDateMenu.add(calendarGroup);
 
-        addSwitch(calendarGroup, 'Скрыть календарь', 'Скрыть виджет календаря (окно автоматически схлопывается)', 'datemenu-calendar-hide');
-        addSwitch(calendarGroup, 'Компактный режим при отсутствии уведомлений', 'Скрыть текст "Нет уведомлений" и центрировать иконку', 'datemenu-compact-empty');
-        addSwitch(calendarGroup, 'Скрыть секцию погоды', null, 'datemenu-weather-hide');
-        addSwitch(calendarGroup, 'Скрыть мировые часы', null, 'datemenu-world-clocks-hide');
-        addSwitch(calendarGroup, 'Скрыть события', null, 'datemenu-events-hide');
+        const rowHideRight = addSwitch(calendarGroup, 'Скрыть правую часть (Календарь и события)', 'Полностью скрыть правую колонку со всеми виджетами', 'datemenu-calendar-hide');
+        addSwitch(calendarGroup, 'Компактный режим при отсутствии уведомлений', 'Скрыть текст «Нет уведомлений» и центрировать иконку', 'datemenu-compact-empty');
+        const rowWeather = addSwitch(calendarGroup, 'Скрыть секцию погоды', null, 'datemenu-weather-hide');
+        const rowClocks = addSwitch(calendarGroup, 'Скрыть мировые часы', null, 'datemenu-world-clocks-hide');
+        const rowEvents = addSwitch(calendarGroup, 'Скрыть события', null, 'datemenu-events-hide');
+
+        const updateRightSubRows = () => {
+            const isRightHidden = rowHideRight.active;
+            rowWeather.sensitive = !isRightHidden;
+            rowClocks.sensitive = !isRightHidden;
+            rowEvents.sensitive = !isRightHidden;
+        };
+        updateRightSubRows();
+        rowHideRight.connect('notify::active', updateRightSubRows);
 
         const dateMenuStyleGroup = new Adw.PreferencesGroup({
             title: _('Стиль и фон шторки уведомлений'),
@@ -563,9 +577,9 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         pageScreenshots.add(screenshotNamingGroup);
 
         const namingModel = new Gtk.StringList();
-        namingModel.append(_('Дата и время (2026-10-25_16.05.30)'));
-        namingModel.append(_('Случайное название (6 цифр, например 482910)'));
-        namingModel.append(_('По умолчанию (Системное GNOME)'));
+        namingModel.append(_('Дата и время'));
+        namingModel.append(_('Случайное число'));
+        namingModel.append(_('По умолчанию'));
         const namingValues = ['date', 'random', 'default'];
 
         const namingRow = new Adw.ComboRow({
@@ -581,8 +595,8 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         addSwitch(screenshotNamingGroup, 'Только буфер обмена', 'Копировать скриншот в буфер обмена без сохранения файла на диск', 'screenshot-clipboard-only');
 
         const saveLocModel = new Gtk.StringList();
-        saveLocModel.append(_('В подпапку «Снимки экрана» (~/Изображения/Снимки экрана)'));
-        saveLocModel.append(_('Напрямую в «Изображения» (~/Изображения)'));
+        saveLocModel.append(_('Подпапка «Снимки экрана»'));
+        saveLocModel.append(_('Папка «Изображения»'));
         const saveLocValues = ['subfolder', 'pictures'];
 
         const saveLocRow = new Adw.ComboRow({
@@ -602,10 +616,10 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         pageScreenshots.add(screenshotSoundGroup);
 
         const soundModel = new Gtk.StringList();
-        soundModel.append(_('Нейтральный бульк (Мягкий клик громкости)'));
-        soundModel.append(_('Отключить звук'));
-        soundModel.append(_('По умолчанию (Щелчок затвора камеры)'));
-        const soundValues = ['bubble', 'disabled', 'default'];
+        soundModel.append(_('Щелчок камеры'));
+        soundModel.append(_('Мягкий клик'));
+        soundModel.append(_('Без звука'));
+        const soundValues = ['default', 'bubble', 'disabled'];
 
         const soundRow = new Adw.ComboRow({
             title: _('Звук затвора'),
@@ -666,29 +680,37 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         clipboardGroup.add(limitRow);
 
         const clipboardShortcutsGroup = new Adw.PreferencesGroup({
-            title: _('Горячие клавиши'),
-            description: _('Быстрый вызов истории буфера и панели эмодзи'),
+            title: _('Горячие клавиши и вызов'),
+            description: _('Быстрый вызов истории буфера обмена'),
         });
         pageClipboard.add(clipboardShortcutsGroup);
 
         const shortcutRow = new Adw.ActionRow({
-            title: _('Горячая клавиша буфера обмена'),
-            subtitle: _('Открывает вкладку истории буфера'),
+            title: _('Встроенное сочетание клавиш'),
+            subtitle: _('Работает глобально в любой программе'),
         });
         shortcutRow.add_suffix(new Gtk.Label({ label: 'Win+V  (<Super>v)', css_classes: ['dim-label'] }));
         clipboardShortcutsGroup.add(shortcutRow);
 
-        const emojiShortcutRow = new Adw.ActionRow({
-            title: _('Горячая клавиша панели эмодзи'),
-            subtitle: _('Открывает вкладку эмодзи'),
-        });
-        emojiShortcutRow.add_suffix(new Gtk.Label({ label: 'Win+.  (<Super>period)', css_classes: ['dim-label'] }));
-        clipboardShortcutsGroup.add(emojiShortcutRow);
-
         const cmdRow = new Adw.ActionRow({
-            title: _('Команда для вызова / бинда в системе'),
-            subtitle: _('qpatcher-clipboard  (или для эмодзи: qpatcher-emoji)'),
+            title: _('Команда для ручного бинда в Настройках GNOME'),
+            subtitle: _('qpatcher-clipboard'),
         });
+        const copyBtn = new Gtk.Button({
+            label: _('Скопировать'),
+            valign: Gtk.Align.CENTER,
+            css_classes: ['suggested-action'],
+        });
+        copyBtn.connect('clicked', () => {
+            const clipboard = Gdk.Display.get_default()?.get_clipboard();
+            clipboard?.set('qpatcher-clipboard');
+            copyBtn.label = _('Скопировано!');
+            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+                copyBtn.label = _('Скопировать');
+                return GLib.SOURCE_REMOVE;
+            });
+        });
+        cmdRow.add_suffix(copyBtn);
         clipboardShortcutsGroup.add(cmdRow);
 
 
@@ -703,54 +725,50 @@ export default class QPatcherPreferences extends ExtensionPreferences {
 
         const themeColorGroup = new Adw.PreferencesGroup({
             title: _('Единый цвет темы (Theme Color)'),
-            description: _('Базовый фоновый цвет для всех панелей и подложек'),
+            description: _('Базовый оттенок для всех панелей, меню и подложек'),
         });
         pageOther.add(themeColorGroup);
-
-        const themeColorRow = new Adw.EntryRow({
-            title: _('Основной цвет панелей и окон (HEX)'),
-            text: settings.get_string('theme-color'),
-        });
-        themeColorRow.connect('changed', () => {
-            settings.set_string('theme-color', themeColorRow.text);
-        });
-        themeColorGroup.add(themeColorRow);
-
-        const themeCardColorRow = new Adw.EntryRow({
-            title: _('Цвет карточек и кнопок (HEX, пусто = авто)'),
-            text: settings.get_string('theme-card-color'),
-        });
-        themeCardColorRow.connect('changed', () => {
-            settings.set_string('theme-card-color', themeCardColorRow.text.trim());
-        });
-        themeColorGroup.add(themeCardColorRow);
 
         addSwitch(themeColorGroup, 'Перекрашивать все меню и диалоги', 'Применять единый цвет темы к контекстным меню, языку и системным окнам', 'recolor-all-menus-and-dialogs');
         addStyleCombo(themeColorGroup, 'Стиль меню и диалогов', 'menus-dialogs-style');
 
-        // Палитра готовых нейтральных и пастельных оттенков в один клик
+        const curColor = settings.get_string('theme-color') || '#1e1e2e';
         const paletteActionRow = new Adw.ActionRow({
-            title: _('Готовые нейтральные и пастельные оттенки'),
-            subtitle: _('Кликните по плитке для мгновенного выбора цвета'),
+            title: _('Готовая палитра темных и нейтральных оттенков'),
+            subtitle: _(`Текущий цвет: ${curColor}`),
         });
         themeColorGroup.add(paletteActionRow);
 
-        const paletteBox = new Gtk.Box({
-            orientation: Gtk.Orientation.HORIZONTAL,
-            spacing: 6,
+        const paletteGrid = new Gtk.FlowBox({
             valign: Gtk.Align.CENTER,
+            selection_mode: Gtk.SelectionMode.NONE,
+            max_children_per_line: 9,
+            min_children_per_line: 6,
+            row_spacing: 6,
+            column_spacing: 6,
+            homogeneous: true,
         });
-        paletteActionRow.add_suffix(paletteBox);
+        paletteActionRow.add_suffix(paletteGrid);
 
         const presets = [
-            { name: 'Graphite', hex: '#1e1e2e' },
-            { name: 'Charcoal', hex: '#24273a' },
+            { name: 'Obsidian Black', hex: '#18181b' },
+            { name: 'Midnight', hex: '#121214' },
+            { name: 'Catppuccin Mocha', hex: '#1e1e2e' },
+            { name: 'Catppuccin Macchiato', hex: '#24273a' },
+            { name: 'Tokyo Night', hex: '#1a1b26' },
+            { name: 'Nord Polar', hex: '#2e3440' },
+            { name: 'Nord Frost', hex: '#3b4252' },
+            { name: 'Gruvbox Dark', hex: '#282828' },
+            { name: 'Charcoal Dark', hex: '#232326' },
+            { name: 'Midnight Navy', hex: '#1b2230' },
+            { name: 'Deep Denim', hex: '#223249' },
             { name: 'Slate Blue', hex: '#2b2d42' },
-            { name: 'Nord Dark', hex: '#3b4252' },
             { name: 'Cool Grey', hex: '#3c3f4a' },
-            { name: 'Warm Taupe', hex: '#363238' },
+            { name: 'Warm Taupe', hex: '#322e2b' },
             { name: 'Deep Espresso', hex: '#262427' },
-            { name: 'Obsidian', hex: '#18181b' },
+            { name: 'Dark Ochre', hex: '#2d2620' },
+            { name: 'Zinc Dark', hex: '#363238' },
+            { name: 'Slate Steel', hex: '#45475a' },
         ];
 
         presets.forEach(p => {
@@ -759,15 +777,15 @@ export default class QPatcherPreferences extends ExtensionPreferences {
                 css_classes: ['palette-chip'],
             });
             const chipProvider = new Gtk.CssProvider();
-            chipProvider.load_from_data(`button { background-color: ${p.hex}; }`, -1);
+            chipProvider.load_from_data(`button { background-color: ${p.hex}; min-width: 28px; min-height: 28px; border-radius: 999px; }`, -1);
             btn.get_style_context().add_provider(chipProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
             btn.connect('clicked', () => {
-                themeColorRow.text = p.hex;
                 settings.set_string('theme-color', p.hex);
+                settings.set_string('theme-card-color', '');
+                paletteActionRow.subtitle = _(`Текущий цвет: ${p.name} (${p.hex})`);
             });
-            paletteBox.append(btn);
+            paletteGrid.append(btn);
         });
-
 
         const accentGroup = new Adw.PreferencesGroup({
             title: _('Системный акцентный цвет (GNOME Native)'),
@@ -777,15 +795,15 @@ export default class QPatcherPreferences extends ExtensionPreferences {
 
         const accentNames = ['blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'];
         const accentLabels = [
-            _('Синий (Blue)'),
-            _('Бирюзовый (Teal)'),
-            _('Зелёный (Green)'),
-            _('Жёлтый (Yellow)'),
-            _('Оранжевый (Orange)'),
-            _('Красный (Red)'),
-            _('Розовый (Pink)'),
-            _('Фиолетовый (Purple)'),
-            _('Сланцевый (Slate)')
+            _('Синий'),
+            _('Бирюзовый'),
+            _('Зелёный'),
+            _('Жёлтый'),
+            _('Оранжевый'),
+            _('Красный'),
+            _('Розовый'),
+            _('Фиолетовый'),
+            _('Серый'),
         ];
 
         const accentModel = new Gtk.StringList();

@@ -786,6 +786,15 @@ const DockedDash = GObject.registerClass({
      * overview visibility
      */
     updateDashVisibility() {
+        if (Main.screenShield?.locked || Main.sessionMode?.currentMode === 'unlock-dialog' || Main.sessionMode?.currentMode === 'gdm') {
+            this._ignoreHover = true;
+            this._removeAnimations();
+            this._animateOut(0, 0);
+            this.visible = false;
+            this.opacity = 0;
+            return;
+        }
+
         if (DockManager.settings.manualhide) {
             this._ignoreHover = true;
             this._removeAnimations();
@@ -859,6 +868,9 @@ const DockedDash = GObject.registerClass({
     }
 
     _hoverChanged() {
+        if (Main.screenShield?.locked || Main.sessionMode?.currentMode === 'unlock-dialog' || Main.sessionMode?.currentMode === 'gdm')
+            return;
+
         if (!this._ignoreHover) {
             // Skip if dock is not in autohide mode for instance because it is shown
             // by intellihide.
@@ -1908,6 +1920,12 @@ export class DockManager {
             () => this._updateUnredirect());
         this._createDocks();
 
+        if (Main.screenShield) {
+            this._signalsHandler.add(Main.screenShield, 'locked-changed', () => {
+                DockManager.allDocks?.forEach(dock => dock.updateDashVisibility());
+            });
+        }
+
         this._overrideAppMenus();
 
         // status variable: true when the overview is shown through the dash
@@ -2092,6 +2110,12 @@ export class DockManager {
             this._restoreDash();
             this._deleteDocks();
             this._createDocks();
+
+        if (Main.screenShield) {
+            this._signalsHandler.add(Main.screenShield, 'locked-changed', () => {
+                DockManager.allDocks?.forEach(dock => dock.updateDashVisibility());
+            });
+        }
             this.emit('toggled');
         });
     }

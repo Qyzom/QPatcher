@@ -785,7 +785,17 @@ export default class QPatcherExtension extends Extension {
             this._origUpdateBoxes = Main.layoutManager._updateBoxes;
             const self = this;
             Main.layoutManager._updateBoxes = function() {
-                self._origUpdateBoxes.call(this);
+                const targetIndex = self._getTargetTopbarMonitorIndex();
+                const monitors = this.monitors || [];
+                const targetMon = (targetIndex >= 0 && targetIndex < monitors.length) ? monitors[targetIndex] : this.primaryMonitor;
+
+                const origPrimary = this.primaryMonitor;
+                try {
+                    this.primaryMonitor = targetMon;
+                    self._origUpdateBoxes.call(this);
+                } finally {
+                    this.primaryMonitor = origPrimary;
+                }
                 self._updatePanelMonitor();
             };
         }
@@ -2052,12 +2062,6 @@ export default class QPatcherExtension extends Extension {
                 panelBox.set_position(mon.x, mon.y);
                 panelBox.set_size(mon.width, panelBox.height);
 
-                // Поднимаем панель над всеми слоями окон, чтобы окна никогда её не перекрывали
-                const uiGroup = this._getUiGroup();
-                if (uiGroup) {
-                    uiGroup.set_child_above_sibling(panelBox, null);
-                }
-
                 if (Array.isArray(Main.layoutManager._trackedActors)) {
                     for (const item of Main.layoutManager._trackedActors) {
                         if (item.actor === panelBox) {
@@ -3296,8 +3300,10 @@ export default class QPatcherExtension extends Extension {
                 }
             }
 
-            if (file)
+            if (file) {
+                self._playScreenshotSound();
                 this.emit('screenshot-taken', file);
+            }
         };
 
         try {
@@ -3397,16 +3403,18 @@ export default class QPatcherExtension extends Extension {
 
     _playScreenshotSound() {
         try {
-            const soundMode = this._getSettingString('screenshot-sound', 'bubble');
+            const soundMode = this._getSettingString('screenshot-sound', 'default');
             if (soundMode === 'disabled')
                 return;
 
-            let soundFile = '/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga';
-            if (soundMode === 'default') {
-                if (GLib.file_test('/usr/share/sounds/freedesktop/stereo/screen-capture.oga', GLib.FileTest.EXISTS)) {
-                    soundFile = '/usr/share/sounds/freedesktop/stereo/screen-capture.oga';
-                } else if (GLib.file_test('/usr/share/sounds/freedesktop/stereo/camera-shutter.oga', GLib.FileTest.EXISTS)) {
+            let soundFile = '/usr/share/sounds/freedesktop/stereo/camera-shutter.oga';
+            if (soundMode === 'bubble') {
+                soundFile = '/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga';
+            } else if (soundMode === 'default' || soundMode === 'shutter') {
+                if (GLib.file_test('/usr/share/sounds/freedesktop/stereo/camera-shutter.oga', GLib.FileTest.EXISTS)) {
                     soundFile = '/usr/share/sounds/freedesktop/stereo/camera-shutter.oga';
+                } else if (GLib.file_test('/usr/share/sounds/freedesktop/stereo/screen-capture.oga', GLib.FileTest.EXISTS)) {
+                    soundFile = '/usr/share/sounds/freedesktop/stereo/screen-capture.oga';
                 } else {
                     soundFile = `${global.datadir}/sounds/screen-capture.oga`;
                 }

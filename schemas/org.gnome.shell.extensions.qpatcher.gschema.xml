@@ -448,7 +448,7 @@
     </key>
 
     <key name="screenshot-sound" type="s">
-      <default>'bubble'</default>
+      <default>'default'</default>
       <summary>Screenshot Sound Effect</summary>
       <description>'default', 'disabled', or 'bubble'</description>
     </key>
