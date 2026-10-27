@@ -419,12 +419,6 @@
       <description>Immediately open and focus password entry on lock screen without needing to dismiss the clock curtain</description>
     </key>
 
-    <key name="login-auto-select-single-user" type="b">
-      <default>true</default>
-      <summary>Auto-select Single User</summary>
-      <description>If only one user exists, automatically select that user on the login screen and immediately prompt for password</description>
-    </key>
-
     <key name="recolor-all-menus-and-dialogs" type="b">
       <default>true</default>
       <summary>Recolor Menus and Dialogs</summary>

@@ -531,8 +531,8 @@ export class EmojiManager {
 
 export const QPatcherClipboardIndicator = GObject.registerClass(
     class QPatcherClipboardIndicator extends PanelMenu.Button {
-        _init(extension, clipboardManager, emojiManager) {
-            super._init(0.5, 'QPatcher Clipboard', false);
+        constructor(extension, clipboardManager, emojiManager) {
+            super(0.5, 'QPatcher Clipboard', false);
 
             this._extension = extension;
             this._clipboardManager = clipboardManager;

@@ -832,7 +832,6 @@ const settings = new Gio.Settings({ schema_id: "org.gnome.shell.extensions.qpatc
 
         addSwitch(lockGroup, 'Патчить топбар и стиль на экране блокировки', 'Переносит топбар на выбранный монитор и сохраняет заглавный язык и стили', 'lockscreen-topbar-enable');
         addSwitch(lockGroup, 'Сразу открывать ввод пароля (без шторы часов)', 'Автоматически пропускает экран с часами на локскрине и сразу активирует поле ввода', 'lockscreen-auto-focus-password');
-        addSwitch(lockGroup, 'Автовыбор единственного пользователя', 'Если в системе один пользователь — не требовать кликать по нему, а сразу запрашивать пароль', 'login-auto-select-single-user');
         addSwitch(lockGroup, 'Не тушить экран при блокировке (Win+L)', 'Оставляет экран блокировки с часами и обоями включенным, не выключая мониторы', 'lockscreen-prevent-blank');
         addSwitch(lockGroup, 'Блокировать экран при автологине (Boot Lock)', 'Если в GDM включен автоматический вход, система при загрузке сразу покажет кастомный экран блокировки', 'autologin-lock-on-boot');
 

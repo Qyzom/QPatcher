@@ -650,10 +650,6 @@ export default class QPatcherExtension extends Extension {
             // ScreenShield lock-screen-shown hook automatically inspects the setting
         });
 
-        watchKey(this._settings, 'login-auto-select-single-user', () => {
-            // Handled when LoginDialog loads user list
-        });
-
         watchKey(this._settings, 'recolor-all-menus-and-dialogs', () => {
             this._updateDynamicThemeStylesheet();
         });
@@ -781,7 +777,6 @@ export default class QPatcherExtension extends Extension {
         this._setupDockMagnification();
         this._setupForceTopBarPatch();
         this._setupScreenShieldPatch();
-        this._setupGdmSingleUserAutoSelect();
         this._setupOsdMonitorPatch();
         this._setupScreenshotCustomizations();
         this._updateLockScreenDateMenu();
@@ -2973,47 +2968,6 @@ export default class QPatcherExtension extends Extension {
         } catch (e) {
             console.error('[QPatcher] Error in _setupScreenShieldPatch:', e);
         }
-    }
-
-    async _setupGdmSingleUserAutoSelect() {
-        try {
-            const LoginDialogMod = await import('resource:///org/gnome/shell/gdm/loginDialog.js');
-            if (!LoginDialogMod?.LoginDialog) return;
-
-            const proto = LoginDialogMod.LoginDialog.prototype;
-            if (!proto || this._origLoginDialogLoadUserList) return;
-
-            this._origLoginDialogLoadUserList = proto._loadUserList;
-            const self = this;
-
-            proto._loadUserList = function() {
-                self._origLoginDialogLoadUserList.call(this);
-
-                if (!self._getSettingBool('login-auto-select-single-user', true))
-                    return;
-
-                try {
-                    const checkSingleUser = () => {
-                        if (!this._userList) return;
-                        const users = this._userManager?.list_users() || [];
-                        if (users.length === 1) {
-                            const userName = users[0].get_user_name();
-                            const item = this._userList.getItemFromUserName(userName);
-                            if (item && typeof this._onUserListActivated === 'function') {
-                                this._onUserListActivated(item);
-                            }
-                        }
-                    };
-
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        try {
-                            checkSingleUser();
-                        } catch (e) {}
-                        return GLib.SOURCE_REMOVE;
-                    });
-                } catch (e) {}
-            };
-        } catch (e) {}
     }
 
     _restoreScreenShieldPatch() {
