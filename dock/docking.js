@@ -786,7 +786,8 @@ const DockedDash = GObject.registerClass({
      * overview visibility
      */
     updateDashVisibility() {
-        if (Main.screenShield?.locked || Main.sessionMode?.currentMode === 'unlock-dialog' || Main.sessionMode?.currentMode === 'gdm') {
+        const isLocked = Main.sessionMode?.currentMode === 'unlock-dialog' || Main.sessionMode?.currentMode === 'gdm';
+        if (isLocked) {
             this._ignoreHover = true;
             this._removeAnimations();
             this._animateOut(0, 0);
@@ -794,6 +795,9 @@ const DockedDash = GObject.registerClass({
             this.opacity = 0;
             return;
         }
+
+        this.visible = true;
+        this.opacity = 255;
 
         if (DockManager.settings.manualhide) {
             this._ignoreHover = true;
@@ -837,6 +841,8 @@ const DockedDash = GObject.registerClass({
     }
 
     _onOverviewShowing() {
+        this.visible = true;
+        this.opacity = 255;
         this.add_style_class_name('overview');
 
         this._ignoreHover = true;
@@ -868,7 +874,8 @@ const DockedDash = GObject.registerClass({
     }
 
     _hoverChanged() {
-        if (Main.screenShield?.locked || Main.sessionMode?.currentMode === 'unlock-dialog' || Main.sessionMode?.currentMode === 'gdm')
+        const isLocked = Main.sessionMode?.currentMode === 'unlock-dialog' || Main.sessionMode?.currentMode === 'gdm';
+        if (isLocked)
             return;
 
         if (!this._ignoreHover) {
@@ -1920,8 +1927,8 @@ export class DockManager {
             () => this._updateUnredirect());
         this._createDocks();
 
-        if (Main.screenShield) {
-            this._signalsHandler.add(Main.screenShield, 'locked-changed', () => {
+        if (Main.sessionMode) {
+            this._signalsHandler.add(Main.sessionMode, 'updated', () => {
                 DockManager.allDocks?.forEach(dock => dock.updateDashVisibility());
             });
         }
@@ -2111,8 +2118,8 @@ export class DockManager {
             this._deleteDocks();
             this._createDocks();
 
-        if (Main.screenShield) {
-            this._signalsHandler.add(Main.screenShield, 'locked-changed', () => {
+        if (Main.sessionMode) {
+            this._signalsHandler.add(Main.sessionMode, 'updated', () => {
                 DockManager.allDocks?.forEach(dock => dock.updateDashVisibility());
             });
         }

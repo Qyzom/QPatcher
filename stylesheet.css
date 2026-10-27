@@ -568,11 +568,12 @@
 .qpatcher-search-entry {
     background-color: rgba(255, 255, 255, 0.07) !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 12px !important;
-    padding: 8px 14px !important;
+    border-radius: 10px !important;
+    padding: 6px 10px !important;
     color: #ffffff !important;
     caret-color: #3584e4 !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
+    min-height: 26px !important;
 }
 
 .qpatcher-search-entry:focus {
@@ -583,6 +584,7 @@
 .qpatcher-search-icon {
     color: rgba(255, 255, 255, 0.6) !important;
     margin-right: 6px;
+    icon-size: 16px !important;
 }
 
 .qpatcher-dialog-close-btn {
@@ -629,27 +631,27 @@
 
 /* Scroll View & Content */
 .qpatcher-scroll-view {
-    max-height: 420px;
+    max-height: 290px;
 }
 
 .qpatcher-items-list {
-    spacing: 6px;
-    padding: 4px;
+    spacing: 5px;
+    padding: 2px;
 }
 
 .qpatcher-section-header {
     font-size: 11px;
     font-weight: bold;
     color: rgba(255, 255, 255, 0.45);
-    padding: 6px 8px 2px 8px;
+    padding: 4px 8px 2px 8px;
     letter-spacing: 0.5px;
 }
 
 .qpatcher-history-row {
     background-color: rgba(255, 255, 255, 0.04) !important;
     border: 1px solid rgba(255, 255, 255, 0.05) !important;
-    border-radius: 10px !important;
-    padding: 8px 12px !important;
+    border-radius: 9px !important;
+    padding: 6px 10px !important;
     margin-bottom: 2px;
 }
 
@@ -807,8 +809,8 @@
 
 /* Popup Container for native TopBar Clipboard Menu */
 .qpatcher-clipboard-popup {
-    padding: 10px;
-    spacing: 10px;
+    padding: 8px;
+    spacing: 8px;
 }
 
 /* Ensure dock is completely hidden on lock screen */

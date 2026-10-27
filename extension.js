@@ -2654,10 +2654,13 @@ export default class QPatcherExtension extends Extension {
 
     _updateDockVisibilityForSession(isLocked) {
         try {
-            if (isLocked) {
-                global.stage.add_style_class_name('qpatcher-screen-locked');
-            } else {
-                global.stage.remove_style_class_name('qpatcher-screen-locked');
+            const uiGroup = this._getUiGroup();
+            if (uiGroup) {
+                if (isLocked) {
+                    uiGroup.add_style_class_name('qpatcher-screen-locked');
+                } else {
+                    uiGroup.remove_style_class_name('qpatcher-screen-locked');
+                }
             }
 
             const allDocks = DockManager?.allDocks || this._dockManager?._allDocks || [];
@@ -2672,10 +2675,10 @@ export default class QPatcherExtension extends Extension {
                     dock.opacity = 255;
                     dock.reactive = true;
                     dock.show();
+                    dock.updateDashVisibility();
                 }
             });
 
-            const uiGroup = this._getUiGroup();
             if (uiGroup) {
                 for (const child of uiGroup.get_children()) {
                     if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
@@ -3239,6 +3242,7 @@ export default class QPatcherExtension extends Extension {
         }
 
         Main.screenshotUI._saveScreenshot = async function() {
+            self._playScreenshotSound();
             let file = null;
 
             if (this._selectionButton.checked || this._screenButton.checked) {
@@ -3409,8 +3413,12 @@ export default class QPatcherExtension extends Extension {
 
             let soundFile = '/usr/share/sounds/freedesktop/stereo/camera-shutter.oga';
             if (soundMode === 'bubble') {
-                soundFile = '/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga';
-            } else if (soundMode === 'default' || soundMode === 'shutter') {
+                if (GLib.file_test('/usr/share/sounds/freedesktop/stereo/complete.oga', GLib.FileTest.EXISTS)) {
+                    soundFile = '/usr/share/sounds/freedesktop/stereo/complete.oga';
+                } else {
+                    soundFile = '/usr/share/sounds/freedesktop/stereo/camera-shutter.oga';
+                }
+            } else {
                 if (GLib.file_test('/usr/share/sounds/freedesktop/stereo/camera-shutter.oga', GLib.FileTest.EXISTS)) {
                     soundFile = '/usr/share/sounds/freedesktop/stereo/camera-shutter.oga';
                 } else if (GLib.file_test('/usr/share/sounds/freedesktop/stereo/screen-capture.oga', GLib.FileTest.EXISTS)) {
@@ -3422,6 +3430,7 @@ export default class QPatcherExtension extends Extension {
 
             if (GLib.file_test(soundFile, GLib.FileTest.EXISTS)) {
                 const player = GLib.find_program_in_path('pw-play') ||
+                               GLib.find_program_in_path('canberra-gtk-play') ||
                                GLib.find_program_in_path('paplay');
                 if (player) {
                     try {

@@ -559,21 +559,15 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
 
             this._mainBox = new St.BoxLayout({
                 orientation: Clutter.Orientation.VERTICAL,
-                width: 420,
-                height: 460,
+                width: 380,
+                height: 380,
                 style_class: 'qpatcher-clipboard-popup',
                 reactive: true,
                 can_focus: false,
             });
             this.menu.box.add_child(this._mainBox);
 
-            // Header: Search bar + Close
-            const headerBox = new St.BoxLayout({
-                style_class: 'qpatcher-modal-header',
-                orientation: Clutter.Orientation.HORIZONTAL,
-                x_expand: true,
-            });
-
+            // Header: Search bar
             this._searchEntry = new St.Entry({
                 style_class: 'qpatcher-search-entry',
                 can_focus: true,
@@ -584,6 +578,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             const searchIcon = new St.Icon({
                 icon_name: 'edit-find-symbolic',
                 style_class: 'qpatcher-search-icon',
+                icon_size: 16,
             });
             this._searchEntry.set_primary_icon(searchIcon);
 
@@ -612,18 +607,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 this._refreshClipboardList();
             });
 
-            const closeBtn = new St.Button({
-                style_class: 'qpatcher-dialog-close-btn',
-                child: new St.Icon({
-                    icon_name: 'window-close-symbolic',
-                    icon_size: 16,
-                }),
-            });
-            closeBtn.connect('clicked', () => this.close());
-
-            headerBox.add_child(this._searchEntry);
-            headerBox.add_child(closeBtn);
-            this._mainBox.add_child(headerBox);
+            this._mainBox.add_child(this._searchEntry);
 
             // Body: Scrollable list of clipboard items
             this._clipboardScrollView = new St.ScrollView({
@@ -776,20 +760,20 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                     iconActor = new St.Icon({
                         gicon: gicon,
                         style_class: 'qpatcher-image-thumbnail',
-                        icon_size: 40,
+                        icon_size: 32,
                     });
                 } catch (_) {
                     iconActor = new St.Icon({
                         icon_name: 'image-x-generic-symbolic',
                         style_class: 'qpatcher-type-icon',
-                        icon_size: 24,
+                        icon_size: 20,
                     });
                 }
             } else {
                 iconActor = new St.Icon({
                     icon_name: 'edit-copy-symbolic',
                     style_class: 'qpatcher-type-icon',
-                    icon_size: 24,
+                    icon_size: 20,
                 });
             }
             rowContent.add_child(iconActor);
