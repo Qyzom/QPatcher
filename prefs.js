@@ -680,38 +680,128 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         clipboardGroup.add(limitRow);
 
         const clipboardShortcutsGroup = new Adw.PreferencesGroup({
-            title: _('Горячие клавиши и вызов'),
-            description: _('Быстрый вызов истории буфера обмена'),
+            title: _('Горячие клавиши и внешний вызов'),
+            description: _('Глобальные сочетания клавиш и консольные команды для биндов'),
         });
         pageClipboard.add(clipboardShortcutsGroup);
 
-        const shortcutRow = new Adw.ActionRow({
-            title: _('Встроенное сочетание клавиш'),
-            subtitle: _('Работает глобально в любой программе'),
-        });
-        shortcutRow.add_suffix(new Gtk.Label({ label: 'Win+V  (<Super>v)', css_classes: ['dim-label'] }));
-        clipboardShortcutsGroup.add(shortcutRow);
-
-        const cmdRow = new Adw.ActionRow({
-            title: _('Команда для ручного бинда в Настройках GNOME'),
-            subtitle: _('qpatcher-clipboard'),
-        });
-        const copyBtn = new Gtk.Button({
-            label: _('Скопировать'),
-            valign: Gtk.Align.CENTER,
-            css_classes: ['suggested-action'],
-        });
-        copyBtn.connect('clicked', () => {
-            const clipboard = Gdk.Display.get_default()?.get_clipboard();
-            clipboard?.set('qpatcher-clipboard');
-            copyBtn.label = _('Скопировано!');
-            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
-                copyBtn.label = _('Скопировать');
-                return GLib.SOURCE_REMOVE;
+        function createShortcutRow(title, subtitle, schemaKey, defaultKeys) {
+            const row = new Adw.ActionRow({
+                title: title,
+                subtitle: subtitle,
             });
-        });
-        cmdRow.add_suffix(copyBtn);
-        clipboardShortcutsGroup.add(cmdRow);
+
+            const box = new Gtk.Box({
+                orientation: Gtk.Orientation.HORIZONTAL,
+                spacing: 8,
+                valign: Gtk.Align.CENTER,
+            });
+
+            const keysBox = new Gtk.Box({
+                orientation: Gtk.Orientation.HORIZONTAL,
+                spacing: 6,
+                valign: Gtk.Align.CENTER,
+            });
+            box.append(keysBox);
+
+            function updateDisplay() {
+                let child = keysBox.get_first_child();
+                while (child) {
+                    const next = child.get_next_sibling();
+                    keysBox.remove(child);
+                    child = next;
+                }
+
+                const keys = settings.get_strv(schemaKey);
+                if (!keys || keys.length === 0) {
+                    keysBox.append(new Gtk.Label({
+                        label: _('Не назначено'),
+                        css_classes: ['dim-label'],
+                    }));
+                } else {
+                    for (const k of keys) {
+                        const sc = new Gtk.ShortcutLabel({
+                            accelerator: k,
+                            valign: Gtk.Align.CENTER,
+                        });
+                        keysBox.append(sc);
+                    }
+                }
+            }
+
+            updateDisplay();
+            settings.connect(`changed::${schemaKey}`, updateDisplay);
+
+            const resetBtn = new Gtk.Button({
+                icon_name: 'edit-undo-symbolic',
+                valign: Gtk.Align.CENTER,
+                has_frame: false,
+                tooltip_text: _('Сбросить на значение по умолчанию'),
+            });
+            resetBtn.connect('clicked', () => {
+                settings.set_strv(schemaKey, defaultKeys);
+            });
+            box.append(resetBtn);
+
+            row.add_suffix(box);
+            return row;
+        }
+
+        clipboardShortcutsGroup.add(createShortcutRow(
+            _('Сочетание для истории буфера'),
+            _('Глобальный перехват GNOME Shell (активен во всех приложениях)'),
+            'clipboard-shortcut',
+            ['<Super>v']
+        ));
+
+        clipboardShortcutsGroup.add(createShortcutRow(
+            _('Сочетание для эмодзи'),
+            _('Глобальный перехват GNOME Shell (активен во всех приложениях)'),
+            'emoji-shortcut',
+            ['<Super>period']
+        ));
+
+        // Команда для скриптов / ручного бинда в GNOME Control Center
+        function createCommandRow(title, subtitle, cmdText) {
+            const row = new Adw.ActionRow({
+                title: title,
+                subtitle: subtitle,
+            });
+            const btn = new Gtk.Button({
+                label: _('Скопировать'),
+                valign: Gtk.Align.CENTER,
+                css_classes: ['suggested-action'],
+            });
+            btn.connect('clicked', () => {
+                const clipboard = Gdk.Display.get_default()?.get_clipboard();
+                clipboard?.set(cmdText);
+                btn.label = _('Скопировано!');
+                GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+                    btn.label = _('Скопировать');
+                    return GLib.SOURCE_REMOVE;
+                });
+            });
+            row.add_suffix(btn);
+            return row;
+        }
+
+        clipboardShortcutsGroup.add(createCommandRow(
+            _('Команда вызова буфера обмена'),
+            'qpatcher-clipboard',
+            'qpatcher-clipboard'
+        ));
+
+        clipboardShortcutsGroup.add(createCommandRow(
+            _('Команда вызова эмодзи'),
+            'qpatcher-emoji',
+            'qpatcher-emoji'
+        ));
+
+        clipboardShortcutsGroup.add(createCommandRow(
+            _('Прямой D-Bus вызов (без PATH)'),
+            _('gdbus call --session --dest org.gnome.Shell ...'),
+            `gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell/Extensions/QPatcher --method org.gnome.Shell.Extensions.QPatcher.OpenClipboard 'clipboard'`
+        ));
 
 
         // ==========================================

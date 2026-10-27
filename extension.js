@@ -2271,189 +2271,36 @@ export default class QPatcherExtension extends Extension {
                 const self = this;
                 Object.defineProperty(inputSourceProto, 'shortName', {
                     get() {
-                        const val = this._shortName;
+                        const val = self._origShortNameDesc?.get ? self._origShortNameDesc.get.call(this) : this._shortName;
                         if (self._getSettingBool('keyboard-uppercase') && typeof val === 'string') {
                             return val.toUpperCase();
                         }
                         return val;
                     },
                     set(v) {
-                        this._shortName = v;
-                        this.emit('changed');
+                        if (self._origShortNameDesc?.set) {
+                            self._origShortNameDesc.set.call(this, v);
+                        } else {
+                            this._shortName = v;
+                        }
                     },
                     configurable: true,
                     enumerable: true,
                 });
             }
 
-            if (Main.sessionMode && !this._sessionModeHookConnected) {
-                this._sessionModeHookConnected = true;
-                const id = Main.sessionMode.connect('updated', () => {
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        this._updateKeyboardLayoutText();
-                        return GLib.SOURCE_REMOVE;
-                    });
-                });
-                this._signals.push({ obj: Main.sessionMode, id });
+            if (keyboard?._sourcesChanged) {
+                keyboard._sourcesChanged();
             }
-
-            if (Main.screenShield && !this._screenShieldHookConnected) {
-                this._screenShieldHookConnected = true;
-                const id1 = Main.screenShield.connect('locked-changed', () => {
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        this._updateKeyboardLayoutText();
-                        return GLib.SOURCE_REMOVE;
-                    });
-                });
-                const id2 = Main.screenShield.connect('active-changed', () => {
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        this._updateKeyboardLayoutText();
-                        return GLib.SOURCE_REMOVE;
-                    });
-                });
-                this._signals.push({ obj: Main.screenShield, id: id1 });
-                this._signals.push({ obj: Main.screenShield, id: id2 });
-            }
-
-            if (!keyboard) return;
-
-            let patching = false;
-            const patchLabels = () => {
-                if (patching) return;
-                if (!this._getSettingBool('keyboard-uppercase')) return;
-                patching = true;
-                try {
-                    const updateActorText = (actor) => {
-                        if (!actor || actor.is_finalized?.()) return;
-                        try {
-                            if (actor.get_text && actor.set_text) {
-                                const current = actor.get_text();
-                                if (current && typeof current === 'string' && current.length <= 4 && current !== current.toUpperCase()) {
-                                    actor.set_text(current.toUpperCase());
-                                }
-                            }
-                            if (actor.get_children) {
-                                for (const child of actor.get_children()) {
-                                    updateActorText(child);
-                                }
-                            }
-                        } catch (e) {}
-                    };
-
-                    updateActorText(keyboard);
-
-                    if (keyboard._indicatorLabels) {
-                        for (const label of Object.values(keyboard._indicatorLabels)) {
-                            updateActorText(label);
-                        }
-                    }
-                    if (keyboard._menuItems) {
-                        for (const item of Object.values(keyboard._menuItems)) {
-                            if (item?.indicator) updateActorText(item.indicator);
-                        }
-                    }
-                } catch (e) {} finally {
-                    patching = false;
-                }
-            };
-
-            if (!keyboard._qpatcherStyleHook) {
-                keyboard._qpatcherStyleHook = true;
-                keyboard.connect('style-changed', patchLabels);
-            }
-
-            if (!this._origSetSourceAsActive && keyboard._setSourceAsActive) {
-                this._origSetSourceAsActive = keyboard._setSourceAsActive;
-                const self = this;
-                keyboard._setSourceAsActive = function(source) {
-                    const ret = self._origSetSourceAsActive.call(this, source);
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        patchLabels();
-                        return GLib.SOURCE_REMOVE;
-                    });
-                    return ret;
-                };
-            }
-
-            if (!this._origCurrentSourceChanged && keyboard._currentSourceChanged) {
-                this._origCurrentSourceChanged = keyboard._currentSourceChanged;
-                const self = this;
-                keyboard._currentSourceChanged = function(manager, oldSource) {
-                    const ret = self._origCurrentSourceChanged.call(this, manager, oldSource);
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        patchLabels();
-                        return GLib.SOURCE_REMOVE;
-                    });
-                    return ret;
-                };
-            }
-
-            if (!this._origSourcesChanged && keyboard._sourcesChanged) {
-                this._origSourcesChanged = keyboard._sourcesChanged;
-                const self = this;
-                keyboard._sourcesChanged = function() {
-                    const ret = self._origSourcesChanged.call(this);
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        patchLabels();
-                        return GLib.SOURCE_REMOVE;
-                    });
-                    return ret;
-                };
-            }
-
-            if (mgr) {
-                const id = mgr.connect('current-source-changed', () => {
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        patchLabels();
-                        return GLib.SOURCE_REMOVE;
-                    });
-                });
-                this._signals.push({ obj: mgr, id });
-            }
-
-            patchLabels();
-            this._updateKeyboardLayoutText();
         } catch (e) {}
     }
 
     _updateKeyboardLayoutText() {
         if (!this._getSettingBool('keyboard-uppercase')) return;
         try {
-            const updateActorText = (actor) => {
-                if (!actor || actor.is_finalized?.() || (actor instanceof Clutter.Actor && actor.is_in_destruction?.())) return;
-                try {
-                    if (actor.get_text && actor.set_text) {
-                        const current = actor.get_text();
-                        if (current && typeof current === 'string' && current.length <= 4 && current !== current.toUpperCase()) {
-                            actor.set_text(current.toUpperCase());
-                        }
-                    }
-                    if (actor.get_children) {
-                        for (const child of actor.get_children()) {
-                            updateActorText(child);
-                        }
-                    }
-                } catch (e) {}
-            };
-
-            if (keyboard) {
-                updateActorText(keyboard);
-
-                if (keyboard._indicatorLabels) {
-                    for (const label of Object.values(keyboard._indicatorLabels)) {
-                        updateActorText(label);
-                    }
-                }
-                if (keyboard._menuItems) {
-                    for (const item of Object.values(keyboard._menuItems)) {
-                        if (item?.indicator) updateActorText(item.indicator);
-                    }
-                }
-            }
-
-            const dialog = Main.screenShield?._dialog;
-            if (dialog) {
-                updateActorText(dialog);
+            const keyboard = Main.panel?.statusArea?.keyboard;
+            if (keyboard?._sourcesChanged) {
+                keyboard._sourcesChanged();
             }
         } catch (e) {}
     }
@@ -2465,17 +2312,9 @@ export default class QPatcherExtension extends Extension {
                 this._origShortNameDesc = null;
                 this._inputSourceProto = null;
             }
-            if (this._origSetSourceAsActive && Main.panel?.statusArea?.keyboard) {
-                Main.panel.statusArea.keyboard._setSourceAsActive = this._origSetSourceAsActive;
-                this._origSetSourceAsActive = null;
-            }
-            if (this._origCurrentSourceChanged && Main.panel?.statusArea?.keyboard) {
-                Main.panel.statusArea.keyboard._currentSourceChanged = this._origCurrentSourceChanged;
-                this._origCurrentSourceChanged = null;
-            }
-            if (this._origSourcesChanged && Main.panel?.statusArea?.keyboard) {
-                Main.panel.statusArea.keyboard._sourcesChanged = this._origSourcesChanged;
-                this._origSourcesChanged = null;
+            const keyboard = Main.panel?.statusArea?.keyboard;
+            if (keyboard?._sourcesChanged) {
+                keyboard._sourcesChanged();
             }
         } catch (e) {}
     }
@@ -3291,7 +3130,6 @@ export default class QPatcherExtension extends Extension {
             }
 
             if (file) {
-                self._playScreenshotSound();
                 this.emit('screenshot-taken', file);
             }
         };
@@ -3393,6 +3231,12 @@ export default class QPatcherExtension extends Extension {
 
     _playScreenshotSound() {
         try {
+            const now = GLib.get_monotonic_time();
+            if (this._lastScreenshotSoundTime && (now - this._lastScreenshotSoundTime) < 1000000) {
+                return;
+            }
+            this._lastScreenshotSoundTime = now;
+
             const soundMode = this._getSettingString('screenshot-sound', 'default');
             if (soundMode === 'disabled')
                 return;
@@ -3480,8 +3324,6 @@ export default class QPatcherExtension extends Extension {
         if (cursor === null) {
             cursor = { texture: null, x: 0, y: 0, scale: 1 };
         }
-
-        this._playScreenshotSound();
 
         const pixbuf = await Shell.Screenshot.composite_to_stream(
             texture,
