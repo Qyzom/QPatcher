@@ -2419,15 +2419,6 @@ export default class QPatcherExtension extends Extension {
     _updateKeyboardLayoutText() {
         if (!this._getSettingBool('keyboard-uppercase')) return;
         try {
-            const keyboard = Main.panel?.statusArea?.keyboard;
-            if (keyboard?._inputSourceManager?._inputSources) {
-                for (const is of Object.values(keyboard._inputSourceManager._inputSources)) {
-                    try {
-                        is.emit('changed');
-                    } catch (e) {}
-                }
-            }
-
             const updateActorText = (actor) => {
                 if (!actor || actor.is_finalized?.() || (actor instanceof Clutter.Actor && actor.is_in_destruction?.())) return;
                 try {
@@ -2473,11 +2464,6 @@ export default class QPatcherExtension extends Extension {
                 Object.defineProperty(this._inputSourceProto, 'shortName', this._origShortNameDesc);
                 this._origShortNameDesc = null;
                 this._inputSourceProto = null;
-                if (Main.panel?.statusArea?.keyboard?._inputSourceManager?._inputSources) {
-                    for (const is of Object.values(Main.panel.statusArea.keyboard._inputSourceManager._inputSources)) {
-                        try { is.emit('changed'); } catch (e) {}
-                    }
-                }
             }
             if (this._origSetSourceAsActive && Main.panel?.statusArea?.keyboard) {
                 Main.panel.statusArea.keyboard._setSourceAsActive = this._origSetSourceAsActive;
