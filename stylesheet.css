@@ -755,6 +755,14 @@
     margin-bottom: 6px;
 }
 
+.qpatcher-category-scroll StScrollBar {
+    min-width: 0px !important;
+    min-height: 0px !important;
+    width: 0px !important;
+    height: 0px !important;
+    opacity: 0 !important;
+}
+
 .qpatcher-category-bar {
     spacing: 4px;
     padding: 2px;

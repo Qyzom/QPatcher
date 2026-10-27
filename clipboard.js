@@ -719,7 +719,8 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 x_expand: true,
                 y_expand: false,
                 vscrollbar_policy: St.PolicyType.NEVER,
-                hscrollbar_policy: St.PolicyType.AUTOMATIC,
+                hscrollbar_policy: St.PolicyType.NEVER,
+                enable_mouse_scrolling: true,
             });
             this._categoryBar = new St.BoxLayout({
                 orientation: Clutter.Orientation.HORIZONTAL,
