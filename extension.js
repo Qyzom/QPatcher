@@ -94,8 +94,11 @@ export default class QPatcherExtension extends Extension {
 
     _getSettingString(key, fallback = '') {
         try {
-            if (this._settings?.settings_schema?.has_key(key))
-                return this._settings.get_string(key);
+            if (this._settings?.settings_schema?.has_key(key)) {
+                const val = this._settings.get_string(key);
+                if (val && typeof val === 'string' && val.trim().length > 0)
+                    return val.trim();
+            }
         } catch (e) {}
         return fallback;
     }
@@ -939,7 +942,10 @@ export default class QPatcherExtension extends Extension {
 
     _updateDynamicThemeStylesheet() {
         try {
-            const themeColor = this._getSettingString('theme-color', '#232326');
+            let themeColor = this._getSettingString('theme-color', '#232326').trim();
+            if (!themeColor.startsWith('#') || (themeColor.length !== 4 && themeColor.length !== 7)) {
+                themeColor = '#232326';
+            }
             const customCardColor = this._getSettingString('theme-card-color')?.trim();
             const topbarOpacity = this._getSettingInt('topbar-opacity', 100) / 100.0;
             const notifStyle = this._getSettingString('notification-style', 'theme-grey');
@@ -1046,16 +1052,26 @@ export default class QPatcherExtension extends Extension {
                     box-shadow: none !important;
                 }
 
+                /* Все выпадающие меню (смена языка, плагины Vitals/Tray, системные меню) */
+                .popup-menu-content,
+                .candidate-popup-content,
+                .app-menu .popup-menu-content,
                 .qpatcher-recolor-menus .popup-menu-content,
-                .qpatcher-recolor-menus .candidate-popup-content,
-                .qpatcher-recolor-menus .app-menu .popup-menu-content,
+                .qpatcher-menus-theme .popup-menu-content,
                 .qpatcher-recolor-menus .modal-dialog,
                 .qpatcher-recolor-menus .quick-toggle-menu {
                     background-color: ${themeColor} !important;
                     border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
                 }
 
-                /* Popup Menu Items Hover, Selected and Active */
+                /* Подменю внутри попапов */
+                .popup-sub-menu {
+                    background-color: ${cardBg} !important;
+                    border-radius: 12px !important;
+                }
+
+                /* Элементы меню (пункты, переключатели, кнопки в меню) */
                 .popup-menu-item,
                 .popup-sub-menu .popup-menu-item,
                 .quick-toggle-menu .popup-menu-item,
@@ -1063,15 +1079,9 @@ export default class QPatcherExtension extends Extension {
                     transition-duration: 120ms !important;
                 }
 
-                .qpatcher-recolor-menus .popup-menu-item:hover,
-                .qpatcher-recolor-menus .popup-menu-item:selected,
-                .qpatcher-recolor-menus .popup-menu-item:focus,
-                .qpatcher-menus-theme .popup-menu-item:hover,
-                .qpatcher-menus-theme .popup-menu-item:selected,
-                .qpatcher-menus-theme .popup-menu-item:focus,
-                .popup-menu-content .popup-menu-item:hover,
-                .popup-menu-content .popup-menu-item:selected,
-                .popup-menu-content .popup-menu-item:focus,
+                .popup-menu-item:hover,
+                .popup-menu-item:selected,
+                .popup-menu-item:focus,
                 .popup-sub-menu .popup-menu-item:hover,
                 .popup-sub-menu .popup-menu-item:selected,
                 .popup-sub-menu .popup-menu-item:focus,
@@ -1082,13 +1092,15 @@ export default class QPatcherExtension extends Extension {
                     color: #ffffff !important;
                 }
 
-                .qpatcher-recolor-menus .popup-menu-item:active,
-                .qpatcher-menus-theme .popup-menu-item:active,
-                .popup-menu-content .popup-menu-item:active,
+                .popup-menu-item:active,
                 .popup-sub-menu .popup-menu-item:active,
                 .quick-toggle-menu .popup-menu-item:active {
                     background-color: ${cardActiveBg} !important;
                     color: #ffffff !important;
+                }
+
+                .popup-separator-menu-item .popup-separator-menu-item-separator {
+                    background-color: rgba(255, 255, 255, 0.1) !important;
                 }
 
                 /* ======================================================== */

@@ -833,7 +833,8 @@ app.connect("activate", () => {
         addSwitch(themeColorGroup, 'Перекрашивать все меню и диалоги', 'Применять единый цвет темы к контекстным меню, языку и системным окнам', 'recolor-all-menus-and-dialogs');
         addStyleCombo(themeColorGroup, 'Стиль меню и диалогов', 'menus-dialogs-style');
 
-        const curColor = settings.get_string('theme-color') || '#1e1e2e';
+        let curColor = (settings.get_string('theme-color') || '').trim();
+        if (!curColor.startsWith('#')) curColor = '#232326';
         const paletteActionRow = new Adw.ActionRow({
             title: _('Готовая палитра темных и нейтральных оттенков'),
             subtitle: _(`Текущий цвет: ${curColor}`),

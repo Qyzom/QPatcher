@@ -131,7 +131,7 @@
 .qpatcher-badge-accent .app-well-app .notification-badge,
 .qpatcher-badge-accent .overview-tile .notification-badge,
 .qpatcher-badge-accent .icon-grid .notification-badge {
-    background-color: var(--qpatcher-accent-color, #3584e4) !important;
+    background-color: #3584e4 !important;
     color: #ffffff !important;
 }
 
@@ -278,7 +278,7 @@
 .qpatcher-notification-theme .message-list .message,
 .notification-banner.qpatcher-notification-theme,
 .message.qpatcher-notification-theme {
-    background-color: var(--qpatcher-theme-color, #232326) !important;
+    background-color: #232326 !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
@@ -405,6 +405,8 @@
     box-shadow: none !important;
 }
 
+.popup-menu-content,
+.candidate-popup-content,
 .qpatcher-recolor-menus .popup-menu-content,
 .qpatcher-recolor-menus .candidate-popup-content,
 .qpatcher-recolor-menus .app-menu .popup-menu-content,
@@ -415,7 +417,7 @@
 .qpatcher-menus-theme .app-menu .popup-menu-content,
 .qpatcher-menus-theme .modal-dialog,
 .qpatcher-menus-theme .quick-toggle-menu {
-    background-color: var(--qpatcher-theme-color, #232326) !important;
+    background-color: #232326 !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
@@ -460,7 +462,7 @@
 
 .qpatcher-recolor-menus .screenshot-ui-panel,
 .qpatcher-menus-theme .screenshot-ui-panel {
-    background-color: var(--qpatcher-theme-color, #232326) !important;
+    background-color: #232326 !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
 }
