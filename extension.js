@@ -15,9 +15,10 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as Layout from 'resource:///org/gnome/shell/ui/layout.js';
 import * as UnlockDialogModule from 'resource:///org/gnome/shell/ui/unlockDialog.js';
 import * as KeyboardStatus from 'resource:///org/gnome/shell/ui/status/keyboard.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { DockManager } from './dock/docking.js';
-import { ClipboardHistoryManager, EmojiManager, QPatcherClipboardDialog } from './clipboard.js';
+import { ClipboardHistoryManager, EmojiManager, QPatcherClipboardIndicator } from './clipboard.js';
 
 const TopBarWindowConstraint = GObject.registerClass(
     { Implements: [Meta.ExternalConstraint] },
@@ -33,7 +34,7 @@ const TopBarWindowConstraint = GObject.registerClass(
                 if (!this._extension._getSettingBool('panel-visibility', true)) return false;
 
                 const monIndex = window.get_monitor();
-                const targetMon = this._extension._getSettingInt('topbar-monitor');
+                const targetMon = this._extension._getTargetTopbarMonitorIndex();
                 if (monIndex !== targetMon) return false;
 
                 const panelBox = Main.layoutManager?.panelBox;
@@ -181,6 +182,19 @@ export default class QPatcherExtension extends Extension {
 
         watchKey(this._settings, 'topbar-monitor', () => {
             this._updatePanelMonitor();
+            this._syncDashToDockSettings();
+            try {
+                for (const actor of global.get_window_actors()) {
+                    const metaWin = actor.meta_window;
+                    if (metaWin) {
+                        metaWin.check_constraints();
+                    }
+                }
+            } catch (_) {}
+        });
+
+        watchKey(this._settings, 'dock-monitor', () => {
+            this._syncDashToDockSettings();
         });
 
         watchKey(this._settings, 'keyboard-uppercase', () => {
@@ -795,16 +809,28 @@ export default class QPatcherExtension extends Extension {
             this._clipboardHistoryManager = new ClipboardHistoryManager(this, this._settings);
             this._clipboardHistoryManager.start();
             this._emojiManager = new EmojiManager(this);
-            this._clipboardDialog = new QPatcherClipboardDialog(this, this._clipboardHistoryManager, this._emojiManager);
+            this._clipboardIndicator = new QPatcherClipboardIndicator(this, this._clipboardHistoryManager, this._emojiManager);
 
+            // Нативный элемент в правой части топбара (как Vitals / AIO Clipboard)
+            Main.panel.addToStatusArea('qpatcher-clipboard', this._clipboardIndicator, 1, 'right');
+
+            const syncClipboardIndicatorVis = () => {
+                if (this._clipboardIndicator) {
+                    this._clipboardIndicator.visible = this._getSettingBool('clipboard-topbar-icon', true);
+                }
+            };
+            syncClipboardIndicatorVis();
+            watchKey(this._settings, 'clipboard-topbar-icon', syncClipboardIndicatorVis);
+
+            // Регистрация глобальных горячих клавиш
             Main.wm.addKeybinding(
                 'clipboard-shortcut',
                 this._settings,
-                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW | Shell.ActionMode.POPUP,
+                Meta.KeyBindingFlags.NONE,
+                Shell.ActionMode.ALL,
                 () => {
-                    if (this._clipboardDialog) {
-                        this._clipboardDialog.openModal('clipboard');
+                    if (this._clipboardIndicator) {
+                        this._clipboardIndicator.openTab('clipboard');
                     }
                 }
             );
@@ -812,16 +838,60 @@ export default class QPatcherExtension extends Extension {
             Main.wm.addKeybinding(
                 'emoji-shortcut',
                 this._settings,
-                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW | Shell.ActionMode.POPUP,
+                Meta.KeyBindingFlags.NONE,
+                Shell.ActionMode.ALL,
                 () => {
-                    if (this._clipboardDialog) {
-                        this._clipboardDialog.openModal('emoji');
+                    if (this._clipboardIndicator) {
+                        this._clipboardIndicator.openTab('emoji');
                     }
                 }
             );
+
+            // Экспорт DBus метода для внешнего вызова из терминала / бинда / скрипта
+            const ifaceXml = `
+            <node>
+              <interface name="org.gnome.Shell.Extensions.QPatcher">
+                <method name="OpenClipboard">
+                  <arg type="s" direction="in" name="tab"/>
+                </method>
+              </interface>
+            </node>`;
+            const nodeInfo = Gio.DBusNodeInfo.new_for_xml(ifaceXml);
+            this._dbusRegistrationId = Gio.DBus.session.register_object(
+                '/org/gnome/Shell/Extensions/QPatcher',
+                nodeInfo.interfaces[0],
+                (conn, sender, path, iface, method, params, invocation) => {
+                    if (method === 'OpenClipboard') {
+                        const [tab] = params.deep_unpack();
+                        if (this._clipboardIndicator) {
+                            this._clipboardIndicator.openTab(tab || 'clipboard');
+                        }
+                        invocation.return_value(null);
+                    }
+                },
+                null,
+                null
+            );
         } catch (e) {
             console.error('[QPatcher] Failed to initialize Clipboard & Emoji manager:', e);
+        }
+
+        // Автоматическая блокировка экрана при старте системы (если настроен автологин)
+        if (this._getSettingBool('autologin-lock-on-boot', false)) {
+            try {
+                const [, uptimeContent] = GLib.file_get_contents('/proc/uptime');
+                const uptimeSec = parseFloat(new TextDecoder().decode(uptimeContent).split(' ')[0]);
+                if (uptimeSec < 75) {
+                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+                        if (Main.screenShield && !Main.screenShield.locked) {
+                            Main.screenShield.lock(true);
+                        }
+                        return GLib.SOURCE_REMOVE;
+                    });
+                }
+            } catch (e) {
+                console.error('[QPatcher] Error checking uptime for autologin lock on boot:', e);
+            }
         }
     }
 
@@ -1636,6 +1706,35 @@ export default class QPatcherExtension extends Extension {
                 d2d.set_double('background-opacity', opacity);
             }
 
+            // Синхронизация монитора для дока
+            const dockMonSetting = this._getSettingInt('dock-monitor', 0);
+            if (dockMonSetting === 3) {
+                // Отображать на всех мониторах
+                d2d.set_boolean('multi-monitor', true);
+            } else {
+                d2d.set_boolean('multi-monitor', false);
+                let targetMonIndex;
+                if (dockMonSetting === 0) {
+                    // Следовать за верхней панелью
+                    targetMonIndex = this._getTargetTopbarMonitorIndex();
+                } else {
+                    const rawIdx = dockMonSetting - 1;
+                    const monitors = Main.layoutManager?.monitors || [];
+                    targetMonIndex = (rawIdx >= 0 && rawIdx < monitors.length) ? rawIdx : 0;
+                }
+
+                const monitors = Main.layoutManager?.monitors || [];
+                if (targetMonIndex >= 0 && targetMonIndex < monitors.length) {
+                    const mon = monitors[targetMonIndex];
+                    if (mon && mon.connector) {
+                        d2d.set_int('preferred-monitor', -2);
+                        d2d.set_string('preferred-monitor-by-connector', mon.connector);
+                    } else {
+                        d2d.set_int('preferred-monitor', targetMonIndex);
+                    }
+                }
+            }
+
             this._updateDockNotificationBadgesVisibility();
         } catch (e) {}
     }
@@ -1926,17 +2025,34 @@ export default class QPatcherExtension extends Extension {
         } catch (e) {}
     }
 
+    _getTargetTopbarMonitorIndex() {
+        const raw = this._getSettingInt('topbar-monitor');
+        const primaryIndex = Main.layoutManager?.primaryIndex ?? 0;
+        const monitors = Main.layoutManager?.monitors || [];
+        if (monitors.length === 0) return 0;
+
+        if (raw === 0) {
+            return (primaryIndex >= 0 && primaryIndex < monitors.length) ? primaryIndex : 0;
+        }
+
+        const specificIndex = raw - 1;
+        if (specificIndex >= 0 && specificIndex < monitors.length) {
+            return specificIndex;
+        }
+        return (primaryIndex >= 0 && primaryIndex < monitors.length) ? primaryIndex : 0;
+    }
+
     _updatePanelMonitor() {
         try {
             if (Main.sessionMode?.currentMode === 'unlock-dialog' && !this._getSettingBool('lockscreen-topbar-enable', true)) {
                 return;
             }
-            const targetMonitor = this._getSettingInt('topbar-monitor');
+            const targetMonitor = this._getTargetTopbarMonitorIndex();
             const panelBox = Main.layoutManager?.panelBox;
             if (!panelBox) return;
 
             const monitors = Main.layoutManager?.monitors || [];
-            if (targetMonitor < monitors.length) {
+            if (targetMonitor >= 0 && targetMonitor < monitors.length) {
                 const mon = monitors[targetMonitor];
                 panelBox.set_position(mon.x, mon.y);
                 panelBox.set_size(mon.width, panelBox.height);
@@ -2539,24 +2655,41 @@ export default class QPatcherExtension extends Extension {
 
     _updateDockVisibilityForSession(isLocked) {
         try {
+            if (isLocked) {
+                global.stage.add_style_class_name('qpatcher-screen-locked');
+            } else {
+                global.stage.remove_style_class_name('qpatcher-screen-locked');
+            }
+
             const allDocks = DockManager?.allDocks || this._dockManager?._allDocks || [];
             allDocks.forEach(dock => {
                 if (isLocked) {
                     dock.visible = false;
+                    dock.opacity = 0;
+                    dock.reactive = false;
                     dock.hide();
                 } else {
                     dock.visible = true;
+                    dock.opacity = 255;
+                    dock.reactive = true;
                     dock.show();
                 }
             });
 
-            if (isLocked) {
-                const uiGroup = this._getUiGroup();
-                if (uiGroup) {
-                    for (const child of uiGroup.get_children()) {
-                        if (child.name === 'dashtodockContainer') {
+            const uiGroup = this._getUiGroup();
+            if (uiGroup) {
+                for (const child of uiGroup.get_children()) {
+                    if (child.name === 'dashtodockContainer' || (child.has_style_class_name && child.has_style_class_name('dashtodockContainer'))) {
+                        if (isLocked) {
                             child.visible = false;
+                            child.opacity = 0;
+                            child.reactive = false;
                             child.hide();
+                        } else {
+                            child.visible = true;
+                            child.opacity = 255;
+                            child.reactive = true;
+                            child.show();
                         }
                     }
                 }
@@ -2954,6 +3087,16 @@ export default class QPatcherExtension extends Extension {
             Main.wm.removeKeybinding('clipboard-shortcut');
             Main.wm.removeKeybinding('emoji-shortcut');
         } catch (_) {}
+
+        if (this._dbusRegistrationId) {
+            Gio.DBus.session.unregister_object(this._dbusRegistrationId);
+            this._dbusRegistrationId = 0;
+        }
+
+        if (this._clipboardIndicator) {
+            this._clipboardIndicator.destroy();
+            this._clipboardIndicator = null;
+        }
 
         if (this._clipboardHistoryManager) {
             this._clipboardHistoryManager.stop();

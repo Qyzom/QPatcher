@@ -6,7 +6,7 @@ import St from 'gi://St';
 import Pango from 'gi://Pango';
 import Meta from 'gi://Meta';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 // Auto-paste simulator via virtual keyboard (Shift + Insert)
 export function triggerAutoPaste() {
@@ -67,7 +67,7 @@ export class ClipboardHistoryManager {
         this._cacheDir = cacheBase;
         this._dataDir = dataBase;
         this._imagesDir = `${dataBase}/images`;
-        this._historyFile = `${cacheBase}/clipboard_history.json`;
+        this._historyFile = `${dataBase}/clipboard_history.json`;
         this._pinnedFile = `${dataBase}/clipboard_pinned.json`;
 
         this._ensureDirectories();
@@ -91,6 +91,13 @@ export class ClipboardHistoryManager {
     _migrateOldExtensionData() {
         try {
             const historyFile = Gio.File.new_for_path(this._historyFile);
+            if (!historyFile.query_exists(null)) {
+                const cacheHistPath = `${GLib.get_user_cache_dir()}/qpatcher/clipboard_history.json`;
+                const cacheHistFile = Gio.File.new_for_path(cacheHistPath);
+                if (cacheHistFile.query_exists(null)) {
+                    cacheHistFile.copy(historyFile, Gio.FileCopyFlags.NONE, null, null);
+                }
+            }
             if (historyFile.query_exists(null)) return;
 
             const oldHistoryPath = `${GLib.get_user_cache_dir()}/all-in-one-clipboard@NiffirgkcaJ.github.com/history_clipboard.json`;
@@ -522,13 +529,10 @@ export class EmojiManager {
     }
 }
 
-export const QPatcherClipboardDialog = GObject.registerClass(
-    class QPatcherClipboardDialog extends ModalDialog.ModalDialog {
+export const QPatcherClipboardIndicator = GObject.registerClass(
+    class QPatcherClipboardIndicator extends PanelMenu.Button {
         _init(extension, clipboardManager, emojiManager) {
-            super._init({
-                styleClass: 'qpatcher-clipboard-dialog',
-                destroyOnClose: false,
-            });
+            super._init(0.5, 'QPatcher Clipboard', false);
 
             this._extension = extension;
             this._clipboardManager = clipboardManager;
@@ -537,20 +541,38 @@ export const QPatcherClipboardDialog = GObject.registerClass(
             this._currentEmojiCategory = 'smileys';
             this._activeQuery = '';
 
-            this.dialogLayout.width = 620;
-            this.dialogLayout.height = 560;
+            const icon = new St.Icon({
+                icon_name: 'edit-copy-symbolic',
+                style_class: 'system-status-icon',
+            });
+            this.add_child(icon);
 
             this._buildUI();
+
+            this.menu.connect('open-state-changed', (_menu, isOpen) => {
+                if (isOpen) {
+                    this._onMenuOpened();
+                }
+            });
         }
 
         _buildUI() {
-            this.contentLayout.remove_all_children();
-            this.contentLayout.add_style_class_name('qpatcher-modal-container');
+            this.menu.removeAll();
+
+            this._mainBox = new St.BoxLayout({
+                orientation: Clutter.Orientation.VERTICAL,
+                width: 520,
+                height: 520,
+                style_class: 'qpatcher-clipboard-popup',
+                reactive: true,
+                can_focus: false,
+            });
+            this.menu.box.add_child(this._mainBox);
 
             // Header: Search bar + Close
             const headerBox = new St.BoxLayout({
                 style_class: 'qpatcher-modal-header',
-                vertical: false,
+                orientation: Clutter.Orientation.HORIZONTAL,
                 x_expand: true,
             });
 
@@ -603,17 +625,17 @@ export const QPatcherClipboardDialog = GObject.registerClass(
 
             headerBox.add_child(this._searchEntry);
             headerBox.add_child(closeBtn);
-            this.contentLayout.add_child(headerBox);
+            this._mainBox.add_child(headerBox);
 
             // Tab bar
             const tabBox = new St.BoxLayout({
                 style_class: 'qpatcher-tabs-bar',
-                vertical: false,
+                orientation: Clutter.Orientation.HORIZONTAL,
                 x_expand: true,
             });
 
             this._btnTabClipboard = new St.Button({
-                label: '📋 История буфера',
+                label: '📋 Буфер обмена',
                 style_class: 'qpatcher-tab-button active',
                 x_expand: true,
             });
@@ -628,20 +650,20 @@ export const QPatcherClipboardDialog = GObject.registerClass(
 
             tabBox.add_child(this._btnTabClipboard);
             tabBox.add_child(this._btnTabEmoji);
-            this.contentLayout.add_child(tabBox);
+            this._mainBox.add_child(tabBox);
 
             // Body container
             this._bodyBox = new St.BoxLayout({
                 style_class: 'qpatcher-body-box',
-                vertical: true,
+                orientation: Clutter.Orientation.VERTICAL,
                 x_expand: true,
                 y_expand: true,
             });
-            this.contentLayout.add_child(this._bodyBox);
+            this._mainBox.add_child(this._bodyBox);
 
             // Tab 1: Clipboard View
             this._clipboardView = new St.BoxLayout({
-                vertical: true,
+                orientation: Clutter.Orientation.VERTICAL,
                 x_expand: true,
                 y_expand: true,
             });
@@ -653,7 +675,7 @@ export const QPatcherClipboardDialog = GObject.registerClass(
                 overlay_scrollbars: true,
             });
             this._clipboardList = new St.BoxLayout({
-                vertical: true,
+                orientation: Clutter.Orientation.VERTICAL,
                 x_expand: true,
                 style_class: 'qpatcher-items-list',
             });
@@ -663,7 +685,7 @@ export const QPatcherClipboardDialog = GObject.registerClass(
             // Clipboard footer
             const clipFooter = new St.BoxLayout({
                 style_class: 'qpatcher-footer-bar',
-                vertical: false,
+                orientation: Clutter.Orientation.HORIZONTAL,
                 x_expand: true,
             });
             this._clipboardCountLabel = new St.Label({
@@ -687,7 +709,7 @@ export const QPatcherClipboardDialog = GObject.registerClass(
 
             // Tab 2: Emoji View
             this._emojiView = new St.BoxLayout({
-                vertical: true,
+                orientation: Clutter.Orientation.VERTICAL,
                 x_expand: true,
                 y_expand: true,
             });
@@ -702,7 +724,7 @@ export const QPatcherClipboardDialog = GObject.registerClass(
             });
             this._emojiCategoryBar = new St.BoxLayout({
                 style_class: 'qpatcher-category-bar',
-                vertical: false,
+                orientation: Clutter.Orientation.HORIZONTAL,
                 x_expand: true,
             });
             this._categoryScrollView.add_child(this._emojiCategoryBar);
@@ -733,7 +755,7 @@ export const QPatcherClipboardDialog = GObject.registerClass(
                 overlay_scrollbars: true,
             });
             this._emojiListBox = new St.BoxLayout({
-                vertical: true,
+                orientation: Clutter.Orientation.VERTICAL,
                 x_expand: true,
                 style_class: 'qpatcher-emoji-list-box',
             });
@@ -745,13 +767,22 @@ export const QPatcherClipboardDialog = GObject.registerClass(
             this._updateCategoryButtons();
         }
 
-        vfunc_key_press_event(event) {
-            const symbol = event.get_key_symbol();
-            if (symbol === Clutter.KEY_Escape) {
-                this.close();
-                return Clutter.EVENT_STOP;
+        close() {
+            this.menu.close();
+        }
+
+        _onMenuOpened() {
+            this._searchEntry.set_text('');
+            this._activeQuery = '';
+            if (this._currentTab === 'clipboard') {
+                this._refreshClipboardList();
+            } else {
+                this._refreshEmojiGrid();
             }
-            return super.vfunc_key_press_event(event);
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                this._searchEntry.grab_key_focus();
+                return GLib.SOURCE_REMOVE;
+            });
         }
 
         switchTab(tabName) {
@@ -882,7 +913,7 @@ export const QPatcherClipboardDialog = GObject.registerClass(
             });
 
             const rowContent = new St.BoxLayout({
-                vertical: false,
+                orientation: Clutter.Orientation.HORIZONTAL,
                 x_expand: true,
                 style_class: 'qpatcher-history-row-content',
             });
@@ -916,7 +947,7 @@ export const QPatcherClipboardDialog = GObject.registerClass(
 
             // Middle: text / info
             const detailsBox = new St.BoxLayout({
-                vertical: true,
+                orientation: Clutter.Orientation.VERTICAL,
                 x_expand: true,
                 style_class: 'qpatcher-item-details',
             });
@@ -940,7 +971,7 @@ export const QPatcherClipboardDialog = GObject.registerClass(
 
             // Actions on right
             const actionsBox = new St.BoxLayout({
-                vertical: false,
+                orientation: Clutter.Orientation.HORIZONTAL,
                 style_class: 'qpatcher-item-actions',
             });
 
@@ -1018,7 +1049,7 @@ export const QPatcherClipboardDialog = GObject.registerClass(
             emojis.forEach((em, idx) => {
                 if (idx % COLUMNS === 0) {
                     currentRow = new St.BoxLayout({
-                        vertical: false,
+                        orientation: Clutter.Orientation.HORIZONTAL,
                         x_expand: true,
                         style_class: 'qpatcher-emoji-row',
                     });
@@ -1053,23 +1084,29 @@ export const QPatcherClipboardDialog = GObject.registerClass(
             });
         }
 
-        openModal(initialTab = 'clipboard') {
+        openTab(initialTab = 'clipboard') {
             const enabled = this._extension._getSettingBool('clipboard-enable', true);
             if (!enabled) return false;
 
-            if (this.state === ModalDialog.State.OPENED || this.state === ModalDialog.State.OPENING) {
-                if (this._currentTab !== initialTab) {
-                    this.switchTab(initialTab);
-                }
-                return true;
+            if (!this.visible) {
+                this.visible = true;
             }
 
             this.switchTab(initialTab);
-            const opened = this.open();
-            if (opened) {
-                this._searchEntry.grab_key_focus();
+            if (!this.menu.isOpen) {
+                this.menu.open();
             }
-            return opened;
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                this._searchEntry.grab_key_focus();
+                return GLib.SOURCE_REMOVE;
+            });
+            return true;
+        }
+
+        openModal(initialTab = 'clipboard') {
+            return this.openTab(initialTab);
         }
     }
 );
+
+export const QPatcherClipboardDialog = QPatcherClipboardIndicator;

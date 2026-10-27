@@ -805,6 +805,21 @@
     text-align: center !important;
 }
 
+/* Popup Container for native TopBar Clipboard Menu */
+.qpatcher-clipboard-popup {
+    padding: 10px;
+    spacing: 10px;
+}
+
+/* Ensure dock is completely hidden on lock screen */
+.qpatcher-screen-locked #dashtodockContainer,
+#lockDialogGroup ~ #dashtodockContainer,
+.unlock-dialog #dashtodockContainer {
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+
 
 
 

@@ -498,6 +498,12 @@
       <description>Capture clipboard history and provide clipboard and emoji modal picker</description>
     </key>
 
+    <key name="clipboard-topbar-icon" type="b">
+      <default>true</default>
+      <summary>Show Clipboard Topbar Icon</summary>
+      <description>Display an icon in the top panel to open clipboard history</description>
+    </key>
+
     <key name="clipboard-shortcut" type="as">
       <default>['&lt;Super&gt;v']</default>
       <summary>Clipboard History Shortcut</summary>
@@ -526,6 +532,18 @@
       <default>true</default>
       <summary>Auto Paste on Selection</summary>
       <description>Automatically paste selected clipboard item or emoji into the active window</description>
+    </key>
+
+    <key name="dock-monitor" type="i">
+      <default>0</default>
+      <summary>Dock Monitor</summary>
+      <description>0: Follow topbar, 1: Monitor 1 (DP-2), 2: Monitor 2 (DP-1), 3: Multi-monitor</description>
+    </key>
+
+    <key name="autologin-lock-on-boot" type="b">
+      <default>false</default>
+      <summary>Lock screen on boot</summary>
+      <description>When autologin is enabled, immediately lock the session on startup to show custom lockscreen</description>
     </key>
 
   </schema>

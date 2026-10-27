@@ -308,6 +308,28 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         addStyleCombo(dockStyleGroup, 'Стиль фона дока', 'dock-style');
         addOpacitySlider(dockStyleGroup, 'Прозрачность дока', 'dock-opacity');
 
+        const dockMonitorGroup = new Adw.PreferencesGroup({
+            title: _('Дисплей для док-панели'),
+            description: _('Выбор экрана, на котором располагается док'),
+        });
+        pageDock.add(dockMonitorGroup);
+
+        const dockMonitorModel = new Gtk.StringList();
+        dockMonitorModel.append(_('Следовать за верхней панелью'));
+        dockMonitorModel.append(_('Монитор 1 (DP-2)'));
+        dockMonitorModel.append(_('Монитор 2 (DP-1)'));
+        dockMonitorModel.append(_('Отображать на всех мониторах'));
+
+        const dockMonitorRow = new Adw.ComboRow({
+            title: _('Расположение дока'),
+            model: dockMonitorModel,
+            selected: settings.get_int('dock-monitor'),
+        });
+        dockMonitorRow.connect('notify::selected', () => {
+            settings.set_int('dock-monitor', dockMonitorRow.selected);
+        });
+        dockMonitorGroup.add(dockMonitorRow);
+
 
         // ==========================================
         // 3. ВКЛАДКА: ОБЗОР (OVERVIEW)
@@ -623,6 +645,7 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         pageClipboard.add(clipboardGroup);
 
         addSwitch(clipboardGroup, 'Включить буфер обмена и эмодзи', 'Сохраняет историю буфера обмена и предоставляет всплывающее окно выбора', 'clipboard-enable');
+        addSwitch(clipboardGroup, 'Иконка в топбаре', 'Отображать значок буфера на верхней панели рядом со шторкой', 'clipboard-topbar-icon');
         addSwitch(clipboardGroup, 'Автоматическая вставка при выборе', 'Автоматически вставляет скопированную запись или эмодзи сразу в активное окно', 'clipboard-auto-paste');
         addSwitch(clipboardGroup, 'Очищать историю при перезагрузке', 'Очищает обычную историю при старте системы, сохраняя избранные (закреплённые) записи', 'clipboard-clear-on-reboot');
 
@@ -661,6 +684,12 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         });
         emojiShortcutRow.add_suffix(new Gtk.Label({ label: 'Win+.  (<Super>period)', css_classes: ['dim-label'] }));
         clipboardShortcutsGroup.add(emojiShortcutRow);
+
+        const cmdRow = new Adw.ActionRow({
+            title: _('Команда для вызова / бинда в системе'),
+            subtitle: _('qpatcher-clipboard  (или для эмодзи: qpatcher-emoji)'),
+        });
+        clipboardShortcutsGroup.add(cmdRow);
 
 
         // ==========================================
@@ -796,6 +825,7 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         addSwitch(lockGroup, 'Сразу открывать ввод пароля (без шторы часов)', 'Автоматически пропускает экран с часами на локскрине и сразу активирует поле ввода', 'lockscreen-auto-focus-password');
         addSwitch(lockGroup, 'Автовыбор единственного пользователя', 'Если в системе один пользователь — не требовать кликать по нему, а сразу запрашивать пароль', 'login-auto-select-single-user');
         addSwitch(lockGroup, 'Не тушить экран при блокировке (Win+L)', 'Оставляет экран блокировки с часами и обоями включенным, не выключая мониторы', 'lockscreen-prevent-blank');
+        addSwitch(lockGroup, 'Блокировать экран при автологине (Boot Lock)', 'Если в GDM включен автоматический вход, система при загрузке сразу покажет кастомный экран блокировки', 'autologin-lock-on-boot');
 
         // Обработка переключения разделов сайдбара
         sidebarListBox.connect('row-selected', (_box, row) => {
