@@ -2094,22 +2094,41 @@ export default class QPatcherExtension extends Extension {
             const monitors = Main.layoutManager?.monitors || [];
             if (targetMonitor >= 0 && targetMonitor < monitors.length) {
                 const mon = monitors[targetMonitor];
-                panelBox.set_position(mon.x, mon.y);
-                panelBox.set_size(mon.width, panelBox.height);
+                const showInFullscreen = this._getSettingBool('topbar-show-in-fullscreen', false);
+
+                let changed = false;
+                const [curX, curY] = panelBox.get_position();
+                const curW = panelBox.width;
+
+                if (curX !== mon.x || curY !== mon.y) {
+                    panelBox.set_position(mon.x, mon.y);
+                    changed = true;
+                }
+                if (curW !== mon.width) {
+                    panelBox.set_size(mon.width, panelBox.height);
+                    changed = true;
+                }
 
                 if (Array.isArray(Main.layoutManager._trackedActors)) {
                     for (const item of Main.layoutManager._trackedActors) {
                         if (item.actor === panelBox) {
-                            item.affectsStruts = true;
-                            if (this._getSettingBool('topbar-show-in-fullscreen', false)) {
-                                item.trackFullscreen = false;
+                            if (!item.affectsStruts) {
+                                item.affectsStruts = true;
+                                changed = true;
+                            }
+                            const expectedTrack = !showInFullscreen;
+                            if (item.trackFullscreen !== expectedTrack) {
+                                item.trackFullscreen = expectedTrack;
+                                changed = true;
                             }
                             break;
                         }
                     }
                 }
 
-                Main.layoutManager._queueUpdateRegions();
+                if (changed) {
+                    Main.layoutManager._queueUpdateRegions();
+                }
             }
         } catch (e) {
             console.error('[QPatcher] Error updating panel monitor:', e);
@@ -2117,34 +2136,8 @@ export default class QPatcherExtension extends Extension {
     }
 
     _setupWindowConstraints() {
-        try {
-            if (!this._windowConstraint) {
-                this._windowConstraint = new TopBarWindowConstraint(this);
-            }
-
-            const applyToWindow = (win) => {
-                if (!win || win.is_override_redirect?.()) return;
-                try {
-                    win.add_external_constraint(this._windowConstraint);
-                } catch (e) {}
-            };
-
-            const display = global.display;
-            if (display && !this._windowConstraintConnected) {
-                this._windowConstraintConnected = true;
-                const id = display.connect('window-created', (d, win) => {
-                    applyToWindow(win);
-                });
-                this._signals.push({ obj: display, id });
-
-                if (display.get_tab_list) {
-                    const windows = display.get_tab_list(Meta.TabList.NORMAL_ALL, null) || [];
-                    windows.forEach(applyToWindow);
-                }
-            }
-        } catch (e) {
-            console.error('[QPatcher] Error setting up window constraints:', e);
-        }
+        // Native Mutter struts handle window workarea cleanly. External constraints cause Wayland subsurface assertion errors and typing flickers.
+        this._removeWindowConstraints();
     }
 
     _removeWindowConstraints() {
@@ -2461,11 +2454,15 @@ export default class QPatcherExtension extends Extension {
             if (!panelBox) return;
 
             const enabled = this._getSettingBool('topbar-show-in-fullscreen', false);
+            if (!enabled) {
+                this._restoreForceTopBarPatch();
+                return;
+            }
 
             if (Array.isArray(Main.layoutManager._trackedActors)) {
                 for (const item of Main.layoutManager._trackedActors) {
                     if (item.actor === panelBox) {
-                        item.trackFullscreen = !enabled;
+                        item.trackFullscreen = false;
                         break;
                     }
                 }
@@ -2485,16 +2482,16 @@ export default class QPatcherExtension extends Extension {
                                            wmClass.includes('wine') || wmClass.includes('proton');
                             // В полноэкранных играх скрываем топбар без мерцания, чтобы не ломать игру
                             if (isGame && (focusWin.is_fullscreen?.() || focusWin.fullscreen)) {
-                                if (panelBox) panelBox.visible = false;
-                                if (Main.panel) Main.panel.visible = false;
+                                if (panelBox.visible) panelBox.visible = false;
+                                if (Main.panel.visible) Main.panel.visible = false;
                                 return;
                             }
                         }
-                        if (panelBox) {
+                        if (panelBox && !panelBox.visible) {
                             panelBox.visible = true;
                             panelBox.translation_y = 0;
                         }
-                        if (Main.panel) {
+                        if (Main.panel && !Main.panel.visible) {
                             Main.panel.show();
                             Main.panel.visible = true;
                         }
