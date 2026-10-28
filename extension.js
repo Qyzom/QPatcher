@@ -2483,7 +2483,10 @@ export default class QPatcherExtension extends Extension {
                             const isGame = wmClass.includes('dota') || wmClass.includes('steam_app') ||
                                            wmClass.includes('cs2') || wmClass.includes('gamescope') ||
                                            wmClass.includes('wine') || wmClass.includes('proton');
-                            if (focusWin.is_fullscreen?.() || focusWin.fullscreen || isGame) {
+                            // В полноэкранных играх скрываем топбар без мерцания, чтобы не ломать игру
+                            if (isGame && (focusWin.is_fullscreen?.() || focusWin.fullscreen)) {
+                                if (panelBox) panelBox.visible = false;
+                                if (Main.panel) Main.panel.visible = false;
                                 return;
                             }
                         }
