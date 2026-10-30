@@ -2116,9 +2116,9 @@ export default class QPatcherExtension extends Extension {
                                 item.affectsStruts = true;
                                 changed = true;
                             }
-                            const expectedTrack = !showInFullscreen;
-                            if (item.trackFullscreen !== expectedTrack) {
-                                item.trackFullscreen = expectedTrack;
+                            // Управление видимостью берет на себя QPatcher с учетом конкретного монитора
+                            if (item.trackFullscreen !== false) {
+                                item.trackFullscreen = false;
                                 changed = true;
                             }
                             break;
@@ -2453,12 +2453,7 @@ export default class QPatcherExtension extends Extension {
             const panelBox = Main.layoutManager.panelBox;
             if (!panelBox) return;
 
-            const enabled = this._getSettingBool('topbar-show-in-fullscreen', false);
-            if (!enabled) {
-                this._restoreForceTopBarPatch();
-                return;
-            }
-
+            // Отключаем нативное скрытие GNOME, чтобы контролировать видимость с учетом конкретного монитора
             if (Array.isArray(Main.layoutManager._trackedActors)) {
                 for (const item of Main.layoutManager._trackedActors) {
                     if (item.actor === panelBox) {
@@ -2473,30 +2468,90 @@ export default class QPatcherExtension extends Extension {
                 const self = this;
                 Main.layoutManager._updateVisibility = function() {
                     self._origLayoutUpdateVisibility.call(this);
-                    if (self._getSettingBool('topbar-show-in-fullscreen', false)) {
-                        const focusWin = global.display?.focus_window;
-                        if (focusWin) {
-                            const wmClass = (focusWin.get_wm_class?.() || '').toLowerCase();
-                            const isGame = wmClass.includes('dota') || wmClass.includes('steam_app') ||
-                                           wmClass.includes('cs2') || wmClass.includes('gamescope') ||
-                                           wmClass.includes('wine') || wmClass.includes('proton');
-                            // В полноэкранных играх скрываем топбар без мерцания, чтобы не ломать игру
-                            if (isGame && (focusWin.is_fullscreen?.() || focusWin.fullscreen)) {
-                                if (panelBox.visible) panelBox.visible = false;
-                                if (Main.panel.visible) Main.panel.visible = false;
-                                return;
-                            }
+
+                    // Режим экрана блокировки
+                    if (Main.sessionMode?.currentMode === 'unlock-dialog') {
+                        if (!self._getSettingBool('lockscreen-topbar-enable', true)) {
+                            if (panelBox.visible) panelBox.visible = false;
+                            if (Main.panel.visible) Main.panel.visible = false;
+                            return;
                         }
-                        if (panelBox && !panelBox.visible) {
+                    }
+
+                    // Если открыт режим обзора (Overview) — панель всегда видна
+                    if (Main.overview?.visible || Main.layoutManager?._inOverview) {
+                        if (!panelBox.visible) panelBox.visible = true;
+                        if (!Main.panel.visible) Main.panel.visible = true;
+                        return;
+                    }
+
+                    // Определяем монитор, на котором расположен топбар
+                    const targetMonitor = self._getTargetTopbarMonitorIndex();
+                    const monitors = Main.layoutManager?.monitors || [];
+                    const topbarMon = (targetMonitor >= 0 && targetMonitor < monitors.length) ? monitors[targetMonitor] : null;
+
+                    const focusWin = global.display?.focus_window;
+                    const focusWinMon = (focusWin && focusWin.get_monitor) ? focusWin.get_monitor() : -1;
+                    const focusIsFullscreen = focusWin ? (focusWin.is_fullscreen?.() || focusWin.fullscreen) : false;
+
+                    // Проверяем, есть ли полноэкранное окно именно на мониторе топбара
+                    const isTopbarMonInFullscreen = (topbarMon && topbarMon.inFullscreen) ||
+                                                    (focusIsFullscreen && focusWinMon === targetMonitor);
+
+                    if (!isTopbarMonInFullscreen) {
+                        // Полноэкранных окон на мониторе топбара нет (игра запущена на другом мониторе) —
+                        // топбар ОБЯЗАН оставаться видимым!
+                        if (!panelBox.visible) {
                             panelBox.visible = true;
                             panelBox.translation_y = 0;
                         }
-                        if (Main.panel && !Main.panel.visible) {
+                        if (!Main.panel.visible) {
                             Main.panel.show();
                             Main.panel.visible = true;
                         }
+                        return;
+                    }
+
+                    // Полноэкранное окно находится именно на том же мониторе, где расположен топбар:
+                    const showInFullscreen = self._getSettingBool('topbar-show-in-fullscreen', false);
+                    if (showInFullscreen) {
+                        // Если это игра на том же мониторе — скрываем, чтобы не ломать прицел курсора мыши и HUD
+                        let isGameOnSameMon = false;
+                        if (focusWin && focusWinMon === targetMonitor) {
+                            const wmClass = (focusWin.get_wm_class?.() || '').toLowerCase();
+                            const wmName = (focusWin.get_title?.() || '').toLowerCase();
+                            isGameOnSameMon = wmClass.includes('dota') || wmClass.includes('steam_app') ||
+                                              wmClass.includes('cs2') || wmClass.includes('gamescope') ||
+                                              wmClass.includes('wine') || wmClass.includes('proton') ||
+                                              wmName.includes('dota 2');
+                        }
+
+                        if (isGameOnSameMon) {
+                            if (panelBox.visible) panelBox.visible = false;
+                            if (Main.panel.visible) Main.panel.visible = false;
+                        } else {
+                            if (!panelBox.visible) {
+                                panelBox.visible = true;
+                                panelBox.translation_y = 0;
+                            }
+                            if (!Main.panel.visible) {
+                                Main.panel.show();
+                                Main.panel.visible = true;
+                            }
+                        }
+                    } else {
+                        // Обычный режим (без принудительного показа) — скрываем топбар при полноэкранном окне на его мониторе
+                        if (panelBox.visible) panelBox.visible = false;
+                        if (Main.panel.visible) Main.panel.visible = false;
                     }
                 };
+            }
+
+            if (!this._focusWindowSignalId && global.display) {
+                this._focusWindowSignalId = global.display.connect('notify::focus-window', () => {
+                    Main.layoutManager?._updateVisibility?.();
+                });
+                this._signals.push({ obj: global.display, id: this._focusWindowSignalId });
             }
 
             Main.layoutManager._updateVisibility();
@@ -2510,6 +2565,10 @@ export default class QPatcherExtension extends Extension {
             if (this._origLayoutUpdateVisibility && Main.layoutManager) {
                 Main.layoutManager._updateVisibility = this._origLayoutUpdateVisibility;
                 this._origLayoutUpdateVisibility = null;
+            }
+            if (this._focusWindowSignalId && global.display) {
+                global.display.disconnect(this._focusWindowSignalId);
+                this._focusWindowSignalId = null;
             }
             if (Main.layoutManager?.panelBox && Array.isArray(Main.layoutManager._trackedActors)) {
                 for (const item of Main.layoutManager._trackedActors) {
