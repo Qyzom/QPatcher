@@ -20,77 +20,6 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { DockManager } from './dock/docking.js';
 import { ClipboardHistoryManager, EmojiManager, QPatcherClipboardIndicator } from './clipboard.js';
 
-const TopBarWindowConstraint = GObject.registerClass(
-    { Implements: [Meta.ExternalConstraint] },
-    class TopBarWindowConstraint extends GObject.Object {
-        _init(extension) {
-            super._init();
-            this._extension = extension;
-        }
-
-        vfunc_constrain(window, info) {
-            try {
-                if (!window || !this._extension) return false;
-                if (!this._extension._getSettingBool('panel-visibility', true)) return false;
-
-                // Не искажаем полноэкранные окна (игры во весь экран, видеоплееры)
-                if (window.is_fullscreen?.() || window.fullscreen) return false;
-
-                // Не искажаем игры (Dota 2, Steam, CS2, Wine, Proton, Gamescope)
-                const wmClass = (window.get_wm_class?.() || '').toLowerCase();
-                const wmName = (window.get_title?.() || '').toLowerCase();
-                if (wmClass.includes('dota') || wmClass.includes('steam_app') ||
-                    wmClass.includes('cs2') || wmClass.includes('gamescope') ||
-                    wmClass.includes('wine') || wmClass.includes('proton') ||
-                    wmName.includes('dota 2')) {
-                    return false;
-                }
-
-                // Не искажаем окна без рамок на весь экран (игры в режиме "в окне без рамки" / Borderless Fullscreen)
-                if (!window.decorated && (window.is_maximized_both?.() || window.maximized_vertically)) {
-                    return false;
-                }
-
-                const monIndex = window.get_monitor();
-                const targetMon = this._extension._getTargetTopbarMonitorIndex();
-                if (monIndex !== targetMon) return false;
-
-                const panelBox = Main.layoutManager?.panelBox;
-                if (!panelBox || !panelBox.visible) return false;
-
-                const monitors = Main.layoutManager?.monitors;
-                if (!monitors || monIndex >= monitors.length) return false;
-                const mon = monitors[monIndex];
-
-                const topBarHeight = panelBox.height || 36;
-                const topBarY = mon.y + topBarHeight;
-                const newRect = info.new_rect;
-
-                // Если окно без рамок занимает почти весь экран (игры в borderless)
-                if (!window.decorated && newRect.width >= mon.width && newRect.height >= (mon.height - topBarHeight - 10)) {
-                    return false;
-                }
-
-                if (newRect.y < topBarY) {
-                    const diff = topBarY - newRect.y;
-                    const newH = Math.max(100, newRect.height - diff);
-                    const updatedRect = new Mtk.Rectangle({
-                        x: newRect.x,
-                        y: topBarY,
-                        width: newRect.width,
-                        height: newH,
-                    });
-                    info.set_rect(updatedRect);
-                    return true;
-                }
-            } catch (e) {
-                console.error('[QPatcher] TopBarWindowConstraint error:', e);
-            }
-            return false;
-        }
-    }
-);
-
 export default class QPatcherExtension extends Extension {
     _getUiGroup() {
         return Main.uiGroup || Main.layoutManager?.uiGroup;
@@ -663,10 +592,6 @@ export default class QPatcherExtension extends Extension {
             // ScreenShield activate hook automatically inspects the setting
         });
 
-        watchKey(this._settings, 'topbar-show-in-fullscreen', () => {
-            this._setupForceTopBarPatch();
-        });
-
         watchKey(this._settings, 'lockscreen-topbar-enable', () => {
             this._updatePanelMonitor();
             this._updateLockScreenDateMenu();
@@ -698,14 +623,25 @@ export default class QPatcherExtension extends Extension {
 
         if (Main.overview) {
             this._overviewShowingId = Main.overview.connect('showing', () => {
-                if (getBool('topbar-transparent-in-overview') && Main.panel) {
-                    Main.panel.add_style_class_name('qpatcher-topbar-transparent-in-overview');
+                const panelBox = Main.layoutManager?.panelBox;
+                if (panelBox) {
+                    panelBox.visible = true;
+                    panelBox.translation_y = 0;
+                    panelBox.opacity = 255;
+                }
+                if (Main.panel) {
+                    Main.panel.visible = true;
+                    Main.panel.opacity = 255;
+                    if (getBool('topbar-transparent-in-overview')) {
+                        Main.panel.add_style_class_name('qpatcher-topbar-transparent-in-overview');
+                    }
                 }
             });
             this._overviewHidingId = Main.overview.connect('hiding', () => {
                 if (Main.panel) {
                     Main.panel.remove_style_class_name('qpatcher-topbar-transparent-in-overview');
                 }
+                Main.layoutManager?._updateVisibility?.();
             });
             this._signals.push({ obj: Main.overview, id: this._overviewShowingId });
             this._signals.push({ obj: Main.overview, id: this._overviewHidingId });
@@ -801,31 +737,11 @@ export default class QPatcherExtension extends Extension {
         this._setupKeyboardManagerHook();
         this._setupClassPrototypePatches();
         this._setupDockMagnification();
-        this._setupForceTopBarPatch();
+        this._setupTopbarMonitorHooks();
         this._setupScreenShieldPatch();
         this._setupOsdMonitorPatch();
         this._setupScreenshotCustomizations();
         this._updateLockScreenDateMenu();
-
-        if (!this._origUpdateBoxes && Main.layoutManager?._updateBoxes) {
-            this._origUpdateBoxes = Main.layoutManager._updateBoxes;
-            const self = this;
-            Main.layoutManager._updateBoxes = function() {
-                const targetIndex = self._getTargetTopbarMonitorIndex();
-                const monitors = this.monitors || [];
-                const targetMon = (targetIndex >= 0 && targetIndex < monitors.length) ? monitors[targetIndex] : this.primaryMonitor;
-
-                const origPrimary = this.primaryMonitor;
-                try {
-                    this.primaryMonitor = targetMon;
-                    self._origUpdateBoxes.call(this);
-                } finally {
-                    this.primaryMonitor = origPrimary;
-                }
-                self._updatePanelMonitor();
-            };
-        }
-        this._setupWindowConstraints();
 
         // Поэтапные проходы инициализации увеличения дока после перезагрузки
         [400, 1200, 2500, 5000].forEach(delay => {
@@ -2094,11 +2010,9 @@ export default class QPatcherExtension extends Extension {
             const monitors = Main.layoutManager?.monitors || [];
             if (targetMonitor >= 0 && targetMonitor < monitors.length) {
                 const mon = monitors[targetMonitor];
-                const showInFullscreen = this._getSettingBool('topbar-show-in-fullscreen', false);
 
                 let changed = false;
                 const [curX, curY] = panelBox.get_position();
-                const curW = panelBox.width;
 
                 if (curX !== mon.x || curY !== mon.y) {
                     panelBox.set_position(mon.x, mon.y);
@@ -2108,10 +2022,6 @@ export default class QPatcherExtension extends Extension {
                 panelBox.set_size(mon.width, -1);
                 panelBox.translation_y = 0;
 
-                if (showInFullscreen && Main.uiGroup?.contains(panelBox)) {
-                    Main.uiGroup.set_child_above_sibling(panelBox, null);
-                }
-
                 if (Array.isArray(Main.layoutManager._trackedActors)) {
                     for (const item of Main.layoutManager._trackedActors) {
                         if (item.actor === panelBox) {
@@ -2119,9 +2029,8 @@ export default class QPatcherExtension extends Extension {
                                 item.affectsStruts = true;
                                 changed = true;
                             }
-                            // Управление видимостью берет на себя QPatcher с учетом конкретного монитора
-                            if (item.trackFullscreen !== false) {
-                                item.trackFullscreen = false;
+                            if (!item.trackFullscreen) {
+                                item.trackFullscreen = true;
                                 changed = true;
                             }
                             break;
@@ -2136,28 +2045,6 @@ export default class QPatcherExtension extends Extension {
         } catch (e) {
             console.error('[QPatcher] Error updating panel monitor:', e);
         }
-    }
-
-    _setupWindowConstraints() {
-        // Native Mutter struts handle window workarea cleanly. External constraints cause Wayland subsurface assertion errors and typing flickers.
-        this._removeWindowConstraints();
-    }
-
-    _removeWindowConstraints() {
-        try {
-            if (!this._windowConstraint) return;
-            const display = global.display;
-            if (display?.get_tab_list) {
-                const windows = display.get_tab_list(Meta.TabList.NORMAL_ALL, null) || [];
-                for (const win of windows) {
-                    try {
-                        win.remove_external_constraint(this._windowConstraint);
-                    } catch (e) {}
-                }
-            }
-            this._windowConstraint = null;
-            this._windowConstraintConnected = false;
-        } catch (e) {}
     }
 
     _updateNotificationPosition() {
@@ -2450,149 +2337,62 @@ export default class QPatcherExtension extends Extension {
         } catch (e) {}
     }
 
-    _setupForceTopBarPatch() {
+    _setupTopbarMonitorHooks() {
         try {
             if (!Main.layoutManager) return;
-            const panelBox = Main.layoutManager.panelBox;
-            if (!panelBox) return;
 
-            // Отключаем нативное скрытие GNOME, чтобы контролировать видимость с учетом конкретного монитора
-            if (Array.isArray(Main.layoutManager._trackedActors)) {
-                for (const item of Main.layoutManager._trackedActors) {
-                    if (item.actor === panelBox) {
-                        item.trackFullscreen = false;
-                        break;
-                    }
-                }
-            }
-
-            if (!this._origLayoutUpdateVisibility) {
-                this._origLayoutUpdateVisibility = Main.layoutManager._updateVisibility;
+            // 1. Привязка поиска монитора для panelBox (чтобы нативное отслеживание GNOME знало точный монитор)
+            if (!this._origFindIndexForActor && Main.layoutManager.findIndexForActor) {
+                this._origFindIndexForActor = Main.layoutManager.findIndexForActor;
                 const self = this;
-                Main.layoutManager._updateVisibility = function() {
-                    self._origLayoutUpdateVisibility.call(this);
-
-                    // Режим экрана блокировки
-                    if (Main.sessionMode?.currentMode === 'unlock-dialog') {
-                        if (!self._getSettingBool('lockscreen-topbar-enable', true)) {
-                            if (panelBox.visible) panelBox.visible = false;
-                            if (Main.panel.visible) Main.panel.visible = false;
-                            return;
-                        }
+                Main.layoutManager.findIndexForActor = function(actor) {
+                    if (actor === this.panelBox) {
+                        return self._getTargetTopbarMonitorIndex();
                     }
-
-                    // Если открыт режим обзора (Overview) — панель всегда видна
-                    if (Main.overview?.visible || Main.layoutManager?._inOverview) {
-                        panelBox.visible = true;
-                        panelBox.translation_y = 0;
-                        panelBox.opacity = 255;
-                        if (!Main.panel.visible) {
-                            Main.panel.show();
-                            Main.panel.visible = true;
-                        }
-                        Main.panel.opacity = 255;
-                        if (Main.uiGroup?.contains(panelBox)) {
-                            Main.uiGroup.set_child_above_sibling(panelBox, null);
-                        }
-                        return;
-                    }
-
-                    // Определяем монитор, на котором расположен топбар
-                    const targetMonitor = self._getTargetTopbarMonitorIndex();
-                    const monitors = Main.layoutManager?.monitors || [];
-                    const topbarMon = (targetMonitor >= 0 && targetMonitor < monitors.length) ? monitors[targetMonitor] : null;
-
-                    const focusWin = global.display?.focus_window;
-                    const focusWinMon = (focusWin && focusWin.get_monitor) ? focusWin.get_monitor() : -1;
-                    const focusIsFullscreen = focusWin ? (focusWin.is_fullscreen?.() || focusWin.fullscreen) : false;
-
-                    // Проверяем, есть ли полноэкранное окно именно на мониторе топбара
-                    const isTopbarMonInFullscreen = (topbarMon && topbarMon.inFullscreen) ||
-                                                    (focusIsFullscreen && focusWinMon === targetMonitor);
-
-                    const showInFullscreen = self._getSettingBool('topbar-show-in-fullscreen', false);
-
-                    if (!isTopbarMonInFullscreen) {
-                        // Полноэкранных окон на мониторе топбара нет (игра запущена на другом мониторе) —
-                        // топбар ОБЯЗАН оставаться видимым!
-                        panelBox.visible = true;
-                        panelBox.translation_y = 0;
-                        panelBox.opacity = 255;
-                        if (!Main.panel.visible) {
-                            Main.panel.show();
-                            Main.panel.visible = true;
-                        }
-                        Main.panel.opacity = 255;
-                        if (showInFullscreen && Main.uiGroup?.contains(panelBox)) {
-                            Main.uiGroup.set_child_above_sibling(panelBox, null);
-                        }
-                        return;
-                    }
-
-                    // Полноэкранное окно находится именно на том же мониторе, где расположен топбар:
-                    if (showInFullscreen) {
-                        // Если это игра на том же мониторе — скрываем, чтобы не ломать прицел курсора мыши и HUD
-                        let isGameOnSameMon = false;
-                        if (focusWin && focusWinMon === targetMonitor) {
-                            const wmClass = (focusWin.get_wm_class?.() || '').toLowerCase();
-                            const wmName = (focusWin.get_title?.() || '').toLowerCase();
-                            isGameOnSameMon = wmClass.includes('dota') || wmClass.includes('steam_app') ||
-                                              wmClass.includes('cs2') || wmClass.includes('gamescope') ||
-                                              wmClass.includes('wine') || wmClass.includes('proton') ||
-                                              wmName.includes('dota 2');
-                        }
-
-                        if (isGameOnSameMon) {
-                            if (panelBox.visible) panelBox.visible = false;
-                            if (Main.panel.visible) Main.panel.visible = false;
-                        } else {
-                            panelBox.visible = true;
-                            panelBox.translation_y = 0;
-                            panelBox.opacity = 255;
-                            if (!Main.panel.visible) {
-                                Main.panel.show();
-                                Main.panel.visible = true;
-                            }
-                            Main.panel.opacity = 255;
-                            // Поднимаем топбар над полноэкранным окном (global.top_window_group)
-                            if (Main.uiGroup?.contains(panelBox)) {
-                                Main.uiGroup.set_child_above_sibling(panelBox, null);
-                            }
-                        }
-                    } else {
-                        // Обычный режим (без принудительного показа) — скрываем топбар при полноэкранном окне на его мониторе
-                        if (panelBox.visible) panelBox.visible = false;
-                        if (Main.panel.visible) Main.panel.visible = false;
-                    }
+                    return self._origFindIndexForActor.call(this, actor);
                 };
             }
 
-            if (!this._focusWindowSignalId && global.display) {
-                this._focusWindowSignalId = global.display.connect('notify::focus-window', () => {
-                    Main.layoutManager?._updateVisibility?.();
-                });
-                this._signals.push({ obj: global.display, id: this._focusWindowSignalId });
+            // 2. Позиционирование panelBox на выбранный монитор при пересчете геометрии
+            if (!this._origUpdateBoxes && Main.layoutManager._updateBoxes) {
+                this._origUpdateBoxes = Main.layoutManager._updateBoxes;
+                const self = this;
+                Main.layoutManager._updateBoxes = function() {
+                    const targetIndex = self._getTargetTopbarMonitorIndex();
+                    const monitors = this.monitors || [];
+                    const targetMon = (targetIndex >= 0 && targetIndex < monitors.length) ? monitors[targetIndex] : this.primaryMonitor;
+
+                    const origPrimary = this.primaryMonitor;
+                    try {
+                        this.primaryMonitor = targetMon;
+                        self._origUpdateBoxes.call(this);
+                    } finally {
+                        this.primaryMonitor = origPrimary;
+                    }
+                    self._updatePanelMonitor();
+                };
             }
 
-            Main.layoutManager._updateVisibility();
+            this._updatePanelMonitor();
         } catch (e) {
-            console.error('[QPatcher] Error setting up force topbar patch:', e);
+            console.error('[QPatcher] Error setting up topbar monitor hooks:', e);
         }
     }
 
-    _restoreForceTopBarPatch() {
+    _restoreTopbarMonitorHooks() {
         try {
-            if (this._origLayoutUpdateVisibility && Main.layoutManager) {
-                Main.layoutManager._updateVisibility = this._origLayoutUpdateVisibility;
-                this._origLayoutUpdateVisibility = null;
+            if (this._origFindIndexForActor && Main.layoutManager) {
+                Main.layoutManager.findIndexForActor = this._origFindIndexForActor;
+                this._origFindIndexForActor = null;
             }
-            if (this._focusWindowSignalId && global.display) {
-                global.display.disconnect(this._focusWindowSignalId);
-                this._focusWindowSignalId = null;
+            if (this._origUpdateBoxes && Main.layoutManager) {
+                Main.layoutManager._updateBoxes = this._origUpdateBoxes;
+                this._origUpdateBoxes = null;
             }
             if (Main.layoutManager?.panelBox && Array.isArray(Main.layoutManager._trackedActors)) {
                 for (const item of Main.layoutManager._trackedActors) {
                     if (item.actor === Main.layoutManager.panelBox) {
+                        item.affectsStruts = true;
                         item.trackFullscreen = true;
                         break;
                     }
@@ -3029,12 +2829,7 @@ export default class QPatcherExtension extends Extension {
         this._restoreClassPrototypePatches();
         this._restoreScreenShieldPatch();
         this._restoreOsdMonitorPatch();
-        this._restoreForceTopBarPatch();
-        if (this._origUpdateBoxes && Main.layoutManager) {
-            Main.layoutManager._updateBoxes = this._origUpdateBoxes;
-            this._origUpdateBoxes = null;
-        }
-        this._removeWindowConstraints();
+        this._restoreTopbarMonitorHooks();
         this._updateDockVisibilityForSession(false);
         const unlockMode = Main.sessionMode?._modes?.['unlock-dialog'];
         if (unlockMode?.panel?.center) {

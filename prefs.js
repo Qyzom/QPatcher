@@ -265,7 +265,6 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         pageTopbar.add(topbarVisibilityGroup);
 
         addSwitch(topbarVisibilityGroup, 'Верхняя панель', null, 'panel-visibility');
-        addSwitch(topbarVisibilityGroup, 'Не скрывать в полноэкранном режиме', 'Отображать топбар даже когда приложения открыты во весь экран (Force Top Bar)', 'topbar-show-in-fullscreen');
         addSwitch(topbarVisibilityGroup, 'Кнопка «Обзор»', null, 'activities-button');
         addSwitch(topbarVisibilityGroup, 'Часы и дата', null, 'clock-menu');
         addSwitch(topbarVisibilityGroup, 'Меню доступности', null, 'accessibility-menu');
