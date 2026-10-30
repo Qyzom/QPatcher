@@ -2104,9 +2104,12 @@ export default class QPatcherExtension extends Extension {
                     panelBox.set_position(mon.x, mon.y);
                     changed = true;
                 }
-                if (curW !== mon.width) {
-                    panelBox.set_size(mon.width, panelBox.height);
-                    changed = true;
+                // Всегда используем -1 для высоты, чтобы Clutter/St рассчитывал естественную высоту дочерних элементов
+                panelBox.set_size(mon.width, -1);
+                panelBox.translation_y = 0;
+
+                if (showInFullscreen && Main.uiGroup?.contains(panelBox)) {
+                    Main.uiGroup.set_child_above_sibling(panelBox, null);
                 }
 
                 if (Array.isArray(Main.layoutManager._trackedActors)) {
@@ -2480,8 +2483,17 @@ export default class QPatcherExtension extends Extension {
 
                     // Если открыт режим обзора (Overview) — панель всегда видна
                     if (Main.overview?.visible || Main.layoutManager?._inOverview) {
-                        if (!panelBox.visible) panelBox.visible = true;
-                        if (!Main.panel.visible) Main.panel.visible = true;
+                        panelBox.visible = true;
+                        panelBox.translation_y = 0;
+                        panelBox.opacity = 255;
+                        if (!Main.panel.visible) {
+                            Main.panel.show();
+                            Main.panel.visible = true;
+                        }
+                        Main.panel.opacity = 255;
+                        if (Main.uiGroup?.contains(panelBox)) {
+                            Main.uiGroup.set_child_above_sibling(panelBox, null);
+                        }
                         return;
                     }
 
@@ -2498,22 +2510,26 @@ export default class QPatcherExtension extends Extension {
                     const isTopbarMonInFullscreen = (topbarMon && topbarMon.inFullscreen) ||
                                                     (focusIsFullscreen && focusWinMon === targetMonitor);
 
+                    const showInFullscreen = self._getSettingBool('topbar-show-in-fullscreen', false);
+
                     if (!isTopbarMonInFullscreen) {
                         // Полноэкранных окон на мониторе топбара нет (игра запущена на другом мониторе) —
                         // топбар ОБЯЗАН оставаться видимым!
-                        if (!panelBox.visible) {
-                            panelBox.visible = true;
-                            panelBox.translation_y = 0;
-                        }
+                        panelBox.visible = true;
+                        panelBox.translation_y = 0;
+                        panelBox.opacity = 255;
                         if (!Main.panel.visible) {
                             Main.panel.show();
                             Main.panel.visible = true;
+                        }
+                        Main.panel.opacity = 255;
+                        if (showInFullscreen && Main.uiGroup?.contains(panelBox)) {
+                            Main.uiGroup.set_child_above_sibling(panelBox, null);
                         }
                         return;
                     }
 
                     // Полноэкранное окно находится именно на том же мониторе, где расположен топбар:
-                    const showInFullscreen = self._getSettingBool('topbar-show-in-fullscreen', false);
                     if (showInFullscreen) {
                         // Если это игра на том же мониторе — скрываем, чтобы не ломать прицел курсора мыши и HUD
                         let isGameOnSameMon = false;
@@ -2530,13 +2546,17 @@ export default class QPatcherExtension extends Extension {
                             if (panelBox.visible) panelBox.visible = false;
                             if (Main.panel.visible) Main.panel.visible = false;
                         } else {
-                            if (!panelBox.visible) {
-                                panelBox.visible = true;
-                                panelBox.translation_y = 0;
-                            }
+                            panelBox.visible = true;
+                            panelBox.translation_y = 0;
+                            panelBox.opacity = 255;
                             if (!Main.panel.visible) {
                                 Main.panel.show();
                                 Main.panel.visible = true;
+                            }
+                            Main.panel.opacity = 255;
+                            // Поднимаем топбар над полноэкранным окном (global.top_window_group)
+                            if (Main.uiGroup?.contains(panelBox)) {
+                                Main.uiGroup.set_child_above_sibling(panelBox, null);
                             }
                         }
                     } else {
@@ -2577,6 +2597,9 @@ export default class QPatcherExtension extends Extension {
                         break;
                     }
                 }
+            }
+            if (Main.uiGroup?.contains(Main.layoutManager?.panelBox) && Main.uiGroup?.contains(global.top_window_group)) {
+                Main.uiGroup.set_child_below_sibling(Main.layoutManager.panelBox, global.top_window_group);
             }
         } catch (e) {}
     }
