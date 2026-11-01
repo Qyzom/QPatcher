@@ -1774,120 +1774,140 @@ export default class QPatcherExtension extends Extension {
         return Array.from(dashes);
     }
 
-    _hookDockIcon(icon) {
-        if (!icon) return;
-        if (icon.clip_to_allocation !== undefined) icon.clip_to_allocation = false;
-        icon.set_pivot_point(0.5, 0.5);
-
-        if (!icon._qpatcherConnected) {
-            icon._qpatcherConnected = true;
-
-            icon.connect('notify::hover', () => {
-                if (!this._getSettingBool('dock-magnification')) return;
-                if (icon.hover) {
-                    icon.ease({
-                        scale_x: 1.15,
-                        scale_y: 1.15,
-                        duration: 120,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                    });
-                } else {
-                    icon.ease({
-                        scale_x: 1.0,
-                        scale_y: 1.0,
-                        duration: 140,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                    });
-                }
-            });
-
-            icon.connect('button-press-event', () => {
-                if (!this._getSettingBool('dock-magnification')) return Clutter.EVENT_PROPAGATE;
-                icon.ease({
-                    scale_x: 0.95,
-                    scale_y: 0.95,
-                    duration: 80,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                    onComplete: () => {
-                        icon.ease({
-                            scale_x: icon.hover ? 1.15 : 1.0,
-                            scale_y: icon.hover ? 1.15 : 1.0,
-                            duration: 120,
-                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                        });
-                    }
-                });
-                return Clutter.EVENT_PROPAGATE;
-            });
+    _isValidActor(actor) {
+        if (!actor) return false;
+        try {
+            return Boolean(actor.get_stage && actor.get_stage());
+        } catch (_) {
+            return false;
         }
+    }
+
+    _hookDockIcon(icon) {
+        if (!this._isValidActor(icon)) return;
+        try {
+            if (icon.clip_to_allocation !== undefined) icon.clip_to_allocation = false;
+            icon.set_pivot_point(0.5, 0.5);
+
+            if (!icon._qpatcherConnected) {
+                icon._qpatcherConnected = true;
+
+                icon.connect('notify::hover', () => {
+                    try {
+                        if (!this._getSettingBool('dock-magnification')) return;
+                        if (icon.hover) {
+                            icon.ease({
+                                scale_x: 1.15,
+                                scale_y: 1.15,
+                                duration: 120,
+                                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                            });
+                        } else {
+                            icon.ease({
+                                scale_x: 1.0,
+                                scale_y: 1.0,
+                                duration: 140,
+                                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                            });
+                        }
+                    } catch (_) {}
+                });
+
+                icon.connect('button-press-event', () => {
+                    try {
+                        if (!this._getSettingBool('dock-magnification')) return Clutter.EVENT_PROPAGATE;
+                        icon.ease({
+                            scale_x: 0.95,
+                            scale_y: 0.95,
+                            duration: 80,
+                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                            onComplete: () => {
+                                try {
+                                    icon.ease({
+                                        scale_x: icon.hover ? 1.15 : 1.0,
+                                        scale_y: icon.hover ? 1.15 : 1.0,
+                                        duration: 120,
+                                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                                    });
+                                } catch (_) {}
+                            }
+                        });
+                    } catch (_) {}
+                    return Clutter.EVENT_PROPAGATE;
+                });
+            }
+        } catch (_) {}
     }
 
     _hookDockItem(item) {
-        if (!item) return;
-        if (item.clip_to_allocation !== undefined) item.clip_to_allocation = false;
+        if (!this._isValidActor(item)) return;
+        try {
+            if (item.clip_to_allocation !== undefined) item.clip_to_allocation = false;
 
-        const icon = item.child || item;
-        this._hookDockIcon(icon);
+            const icon = item.child || item;
+            this._hookDockIcon(icon);
 
-        if (icon?.toggleButton) {
-            this._hookDockIcon(icon.toggleButton);
-        }
+            if (icon?.toggleButton) {
+                this._hookDockIcon(icon.toggleButton);
+            }
+        } catch (_) {}
     }
 
     _setupDashMagnification(dash) {
-        if (!dash) return;
-
-        // Отключаем обрезку по всей цепочке родителей
-        let curr = dash;
-        while (curr && curr !== global.stage && curr !== Main.uiGroup) {
-            if (curr.clip_to_allocation !== undefined) curr.clip_to_allocation = false;
-            curr = curr.get_parent?.();
-        }
-
-        if (dash.clip_to_allocation !== undefined) dash.clip_to_allocation = false;
-        if (dash._dashContainer) dash._dashContainer.clip_to_allocation = false;
-        if (dash._scrollView) dash._scrollView.clip_to_allocation = false;
-        if (dash._boxContainer) dash._boxContainer.clip_to_allocation = false;
-
-        const box = dash._box || dash;
-        if (box) {
-            if (box.clip_to_allocation !== undefined) box.clip_to_allocation = false;
-
-            if (!box._qpatcherChildAddedHooked) {
-                box._qpatcherChildAddedHooked = true;
-                box.connect('child-added', (_, item) => {
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        this._hookDockItem(item);
-                        return GLib.SOURCE_REMOVE;
-                    });
-                });
+        if (!this._isValidActor(dash)) return;
+        try {
+            // Отключаем обрезку по всей цепочке родителей
+            let curr = dash;
+            while (curr && curr !== global.stage && curr !== Main.uiGroup) {
+                if (curr.clip_to_allocation !== undefined) curr.clip_to_allocation = false;
+                curr = curr.get_parent?.();
             }
 
-            if (box.get_children) {
-                for (const item of box.get_children()) {
-                    this._hookDockItem(item);
+            if (dash.clip_to_allocation !== undefined) dash.clip_to_allocation = false;
+            if (this._isValidActor(dash._dashContainer)) dash._dashContainer.clip_to_allocation = false;
+            if (this._isValidActor(dash._scrollView)) dash._scrollView.clip_to_allocation = false;
+            if (this._isValidActor(dash._boxContainer)) dash._boxContainer.clip_to_allocation = false;
+
+            const box = dash._box || dash;
+            if (this._isValidActor(box)) {
+                if (box.clip_to_allocation !== undefined) box.clip_to_allocation = false;
+
+                if (!box._qpatcherChildAddedHooked) {
+                    box._qpatcherChildAddedHooked = true;
+                    box.connect('child-added', (_, item) => {
+                        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                            if (this._isValidActor(item)) this._hookDockItem(item);
+                            return GLib.SOURCE_REMOVE;
+                        });
+                    });
+                }
+
+                if (box.get_children) {
+                    for (const item of box.get_children()) {
+                        if (this._isValidActor(item)) this._hookDockItem(item);
+                    }
                 }
             }
-        }
 
-        if (dash._redisplay && !dash._qpatcherRedisplayHooked) {
-            dash._qpatcherRedisplayHooked = true;
-            const origRedisplay = dash._redisplay.bind(dash);
-            dash._redisplay = () => {
-                origRedisplay();
-                GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    this._setupDashMagnification(dash);
-                    return GLib.SOURCE_REMOVE;
-                });
-            };
-        }
-
-        if (dash._showAppsIcon) {
-            this._hookDockItem(dash._showAppsIcon);
-            if (dash.showAppsButton) {
-                this._hookDockItem(dash.showAppsButton);
+            if (dash._redisplay && !dash._qpatcherRedisplayHooked) {
+                dash._qpatcherRedisplayHooked = true;
+                const origRedisplay = dash._redisplay.bind(dash);
+                dash._redisplay = () => {
+                    origRedisplay();
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        this._setupDashMagnification(dash);
+                        return GLib.SOURCE_REMOVE;
+                    });
+                };
             }
-        }
+
+            if (this._isValidActor(dash._showAppsIcon)) {
+                this._hookDockItem(dash._showAppsIcon);
+                if (this._isValidActor(dash.showAppsButton)) {
+                    this._hookDockItem(dash.showAppsButton);
+                }
+            }
+        } catch (_) {}
     }
 
     _setupDockMagnification() {
@@ -2513,6 +2533,13 @@ export default class QPatcherExtension extends Extension {
                         coordinate: Clutter.BindCoordinate.ALL,
                     }));
                 }
+                if (Main.screenShield?._lockDialogGroup && !Main.screenShield._lockDialogGroup._qpatcherBound) {
+                    Main.screenShield._lockDialogGroup._qpatcherBound = true;
+                    Main.screenShield._lockDialogGroup.add_constraint(new Clutter.BindConstraint({
+                        source: screenShieldGroup,
+                        coordinate: Clutter.BindCoordinate.ALL,
+                    }));
+                }
             }
 
             if (Main.screenShield?._lockDialogGroup) {
@@ -2521,10 +2548,15 @@ export default class QPatcherExtension extends Extension {
 
             const monitors = Main.layoutManager?.monitors || [];
             if (dialog._backgroundGroup && monitors.length > 0) {
+                dialog._backgroundGroup.visible = true;
+                dialog._backgroundGroup.opacity = 255;
+
                 const children = dialog._backgroundGroup.get_children();
                 children.forEach((widget, idx) => {
                     if (idx < monitors.length) {
                         const m = monitors[idx];
+                        widget.visible = true;
+                        widget.opacity = 255;
                         widget.set_position(m.x, m.y);
                         widget.set_size(m.width, m.height);
                         if (!widget.layout_manager) {
@@ -2535,13 +2567,34 @@ export default class QPatcherExtension extends Extension {
                             widget.add_constraint(new Layout.MonitorConstraint({ index: idx }));
                         }
                         for (const child of widget.get_children()) {
+                            child.visible = true;
+                            child.opacity = 255;
                             child.x_expand = true;
                             child.y_expand = true;
+                            child.set_size(m.width, m.height);
                         }
                         const effect = widget.get_effect('blur');
-                        if (effect && typeof effect.queue_repaint === 'function') {
-                            effect.queue_repaint();
+                        if (effect) {
+                            const themeContext = St.ThemeContext.get_for_stage(global.stage);
+                            effect.set({
+                                brightness: 0.55,
+                                radius: 60 * (themeContext?.scale_factor || 1),
+                            });
+                            if (typeof effect.queue_repaint === 'function') {
+                                effect.queue_repaint();
+                            }
                         }
+                        widget.queue_relayout();
+                    }
+                });
+            }
+
+            if (dialog._adjustment && !dialog._qpatcherAdjHooked) {
+                dialog._qpatcherAdjHooked = true;
+                dialog._adjustment.connect('notify::value', () => {
+                    const val = dialog._adjustment.value;
+                    if (val === 0 || val === 1) {
+                        this._applyMultiMonitorFixToDialog(dialog);
                     }
                 });
             }
@@ -2557,14 +2610,14 @@ export default class QPatcherExtension extends Extension {
             const dialog = Main.screenShield?._dialog;
             if (!dialog) return;
 
-            this._applyMultiMonitorFixToDialog(dialog);
-
             if (typeof dialog._updateBackgrounds === 'function') {
                 dialog._updateBackgrounds();
             }
             if (typeof dialog._updateBackgroundEffects === 'function') {
                 dialog._updateBackgroundEffects();
             }
+
+            this._applyMultiMonitorFixToDialog(dialog);
         } catch (e) {
             console.error('[QPatcher] Error syncing lock screen backgrounds:', e);
         }
@@ -2610,19 +2663,50 @@ export default class QPatcherExtension extends Extension {
 
                         this._bgManagers.push(bgManager);
 
-                        if (bgManager.backgroundActor) {
-                            bgManager.backgroundActor.x_expand = true;
-                            bgManager.backgroundActor.y_expand = true;
-                        }
-
-                        bgManager.connect('changed', () => {
+                        const syncBgActor = () => {
                             if (bgManager.backgroundActor) {
+                                bgManager.backgroundActor.visible = true;
+                                bgManager.backgroundActor.opacity = 255;
                                 bgManager.backgroundActor.x_expand = true;
                                 bgManager.backgroundActor.y_expand = true;
+                                bgManager.backgroundActor.set_size(monitor.width, monitor.height);
                             }
-                        });
+                            const effect = widget.get_effect('blur');
+                            if (effect) {
+                                const themeContext = St.ThemeContext.get_for_stage(global.stage);
+                                effect.set({
+                                    brightness: 0.55,
+                                    radius: 60 * (themeContext?.scale_factor || 1),
+                                });
+                                if (typeof effect.queue_repaint === 'function') {
+                                    effect.queue_repaint();
+                                }
+                            }
+                        };
+
+                        syncBgActor();
+                        bgManager.connect('changed', syncBgActor);
+                        bgManager.connect('loaded', syncBgActor);
 
                         this._backgroundGroup.add_child(widget);
+                    };
+                }
+
+                if (!this._origUnlockDialogShowClock && proto._showClock) {
+                    this._origUnlockDialogShowClock = proto._showClock;
+                    const self = this;
+                    proto._showClock = function() {
+                        self._origUnlockDialogShowClock.call(this);
+                        self._applyMultiMonitorFixToDialog(this);
+                    };
+                }
+
+                if (!this._origUnlockDialogFail && proto._fail) {
+                    this._origUnlockDialogFail = proto._fail;
+                    const self = this;
+                    proto._fail = function() {
+                        self._origUnlockDialogFail.call(this);
+                        self._applyMultiMonitorFixToDialog(this);
                     };
                 }
             }
@@ -2633,7 +2717,26 @@ export default class QPatcherExtension extends Extension {
                 }
 
                 if (Main.screenShield._dialog) {
-                    this._applyMultiMonitorFixToDialog(Main.screenShield._dialog);
+                    const dlg = Main.screenShield._dialog;
+                    this._applyMultiMonitorFixToDialog(dlg);
+                    if (!dlg._qpatcherShowClockHooked && dlg._showClock) {
+                        dlg._qpatcherShowClockHooked = true;
+                        const origShowClock = dlg._showClock.bind(dlg);
+                        const self = this;
+                        dlg._showClock = function() {
+                            origShowClock();
+                            self._applyMultiMonitorFixToDialog(dlg);
+                        };
+                    }
+                    if (!dlg._qpatcherFailHooked && dlg._fail) {
+                        dlg._qpatcherFailHooked = true;
+                        const origFail = dlg._fail.bind(dlg);
+                        const self = this;
+                        dlg._fail = function() {
+                            origFail();
+                            self._applyMultiMonitorFixToDialog(dlg);
+                        };
+                    }
                 }
 
                 if (!this._origScreenShieldActivate) {
@@ -2739,6 +2842,16 @@ export default class QPatcherExtension extends Extension {
                 UnlockDialogModule.UnlockDialog.prototype._createBackground = this._origUnlockDialogCreateBackground;
                 this._origUnlockDialogCreateBackground = null;
             }
+            if (this._origUnlockDialogShowClock && UnlockDialogModule?.UnlockDialog?.prototype) {
+                UnlockDialogModule.UnlockDialog.prototype._showClock = this._origUnlockDialogShowClock;
+                this._origUnlockDialogShowClock = null;
+            }
+            if (this._origUnlockDialogFail && UnlockDialogModule?.UnlockDialog?.prototype) {
+                UnlockDialogModule.UnlockDialog.prototype._fail = this._origUnlockDialogFail;
+                this._origUnlockDialogFail = null;
+            }
+            this._screenShieldLockShownId = null;
+            this._screenShieldWakeUpId = null;
             if (Main.screenShield?._lockDialogGroup) {
                 Main.screenShield._lockDialogGroup.style = null;
             }
