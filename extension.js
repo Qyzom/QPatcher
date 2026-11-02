@@ -1777,6 +1777,7 @@ export default class QPatcherExtension extends Extension {
     _isValidActor(actor) {
         if (!actor) return false;
         try {
+            if (actor.toString().includes('DISPOSED')) return false;
             return Boolean(actor.get_stage && actor.get_stage());
         } catch (_) {
             return false;
@@ -2229,6 +2230,10 @@ export default class QPatcherExtension extends Extension {
 
             if (keyboard?._sourcesChanged) {
                 keyboard._sourcesChanged();
+                const current = keyboard._getCurrentSource ? keyboard._getCurrentSource() : null;
+                if (current && keyboard._setSourceAsActive) {
+                    keyboard._setSourceAsActive(current);
+                }
             }
         } catch (e) {}
     }
@@ -2237,8 +2242,20 @@ export default class QPatcherExtension extends Extension {
         if (!this._getSettingBool('keyboard-uppercase')) return;
         try {
             const keyboard = Main.panel?.statusArea?.keyboard;
-            if (keyboard?._sourcesChanged) {
-                keyboard._sourcesChanged();
+            if (!keyboard) return;
+
+            if (keyboard._indicatorLabels) {
+                for (const [idx, label] of Object.entries(keyboard._indicatorLabels)) {
+                    const source = keyboard._inputSources?.[idx];
+                    if (source?.shortName && label) {
+                        label.set_text(source.shortName);
+                    }
+                }
+            }
+
+            const current = keyboard._getCurrentSource ? keyboard._getCurrentSource() : null;
+            if (current && keyboard._setSourceAsActive) {
+                keyboard._setSourceAsActive(current);
             }
         } catch (e) {}
     }
@@ -2253,6 +2270,10 @@ export default class QPatcherExtension extends Extension {
             const keyboard = Main.panel?.statusArea?.keyboard;
             if (keyboard?._sourcesChanged) {
                 keyboard._sourcesChanged();
+                const current = keyboard._getCurrentSource ? keyboard._getCurrentSource() : null;
+                if (current && keyboard._setSourceAsActive) {
+                    keyboard._setSourceAsActive(current);
+                }
             }
         } catch (e) {}
     }
@@ -2559,19 +2580,9 @@ export default class QPatcherExtension extends Extension {
                         widget.opacity = 255;
                         widget.set_position(m.x, m.y);
                         widget.set_size(m.width, m.height);
-                        if (!widget.layout_manager) {
-                            widget.layout_manager = new Clutter.BinLayout();
-                        }
-                        if (!widget._qpatcherConstraint) {
-                            widget._qpatcherConstraint = true;
-                            widget.add_constraint(new Layout.MonitorConstraint({ index: idx }));
-                        }
                         for (const child of widget.get_children()) {
                             child.visible = true;
                             child.opacity = 255;
-                            child.x_expand = true;
-                            child.y_expand = true;
-                            child.set_size(m.width, m.height);
                         }
                         const effect = widget.get_effect('blur');
                         if (effect) {
@@ -2598,8 +2609,6 @@ export default class QPatcherExtension extends Extension {
                     }
                 });
             }
-
-            this._updateKeyboardLayoutText();
         } catch (e) {
             console.error('[QPatcher] Error applying multi-monitor fix to dialog:', e);
         }
@@ -2610,9 +2619,6 @@ export default class QPatcherExtension extends Extension {
             const dialog = Main.screenShield?._dialog;
             if (!dialog) return;
 
-            if (typeof dialog._updateBackgrounds === 'function') {
-                dialog._updateBackgrounds();
-            }
             if (typeof dialog._updateBackgroundEffects === 'function') {
                 dialog._updateBackgroundEffects();
             }
@@ -2650,15 +2656,12 @@ export default class QPatcherExtension extends Extension {
                             width: monitor.width,
                             height: monitor.height,
                             effect: new Shell.BlurEffect({name: 'blur'}),
-                            layout_manager: new Clutter.BinLayout(),
                         });
-                        widget.add_constraint(new Layout.MonitorConstraint({ index: monitorIndex }));
 
                         const bgManager = new Background.BackgroundManager({
                             container: widget,
                             monitorIndex,
                             controlPosition: false,
-                            useContentSize: false,
                         });
 
                         this._bgManagers.push(bgManager);
@@ -2667,9 +2670,6 @@ export default class QPatcherExtension extends Extension {
                             if (bgManager.backgroundActor) {
                                 bgManager.backgroundActor.visible = true;
                                 bgManager.backgroundActor.opacity = 255;
-                                bgManager.backgroundActor.x_expand = true;
-                                bgManager.backgroundActor.y_expand = true;
-                                bgManager.backgroundActor.set_size(monitor.width, monitor.height);
                             }
                             const effect = widget.get_effect('blur');
                             if (effect) {
