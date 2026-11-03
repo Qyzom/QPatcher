@@ -544,9 +544,11 @@
     box-shadow: none !important;
 }
 
-/* Transparent background for unlock group to preserve wallpaper */
-#lockDialogGroup {
+/* Transparent background for unlock group and shield background to preserve multi-monitor wallpaper */
+#lockDialogGroup,
+.screen-shield-background {
     background-color: transparent !important;
+    background: transparent !important;
 }
 
 /* =================================================================== */

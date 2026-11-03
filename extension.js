@@ -1354,6 +1354,12 @@ export default class QPatcherExtension extends Extension {
                     background-color: ${cardBg} !important;
                     border: 1px solid rgba(255, 255, 255, 0.12) !important;
                 }
+
+                #lockDialogGroup,
+                .screen-shield-background {
+                    background-color: transparent !important;
+                    background: transparent !important;
+                }
             `;
             GLib.file_set_contents(cssPath, cssContent);
 
@@ -2569,6 +2575,10 @@ export default class QPatcherExtension extends Extension {
 
             const monitors = Main.layoutManager?.monitors || [];
             if (dialog._backgroundGroup && monitors.length > 0) {
+                if (dialog._backgroundGroup.get_n_children() < monitors.length && typeof dialog._updateBackgrounds === 'function') {
+                    dialog._updateBackgrounds();
+                }
+
                 dialog._backgroundGroup.visible = true;
                 dialog._backgroundGroup.opacity = 255;
 
@@ -2580,9 +2590,18 @@ export default class QPatcherExtension extends Extension {
                         widget.opacity = 255;
                         widget.set_position(m.x, m.y);
                         widget.set_size(m.width, m.height);
+                        if (!widget.layout_manager) {
+                            widget.layout_manager = new Clutter.BinLayout();
+                        }
                         for (const child of widget.get_children()) {
                             child.visible = true;
                             child.opacity = 255;
+                            child.x_expand = true;
+                            child.y_expand = true;
+                            child.set_position(0, 0);
+                            child.set_size(m.width, m.height);
+                            // Avoid Mutter untransformed culling for monitors at (0, 0)
+                            child.translation_x = 1.0;
                         }
                         const effect = widget.get_effect('blur');
                         if (effect) {
@@ -2656,6 +2675,7 @@ export default class QPatcherExtension extends Extension {
                             width: monitor.width,
                             height: monitor.height,
                             effect: new Shell.BlurEffect({name: 'blur'}),
+                            layout_manager: new Clutter.BinLayout(),
                         });
 
                         const bgManager = new Background.BackgroundManager({
@@ -2670,6 +2690,11 @@ export default class QPatcherExtension extends Extension {
                             if (bgManager.backgroundActor) {
                                 bgManager.backgroundActor.visible = true;
                                 bgManager.backgroundActor.opacity = 255;
+                                bgManager.backgroundActor.x_expand = true;
+                                bgManager.backgroundActor.y_expand = true;
+                                bgManager.backgroundActor.set_position(0, 0);
+                                bgManager.backgroundActor.set_size(monitor.width, monitor.height);
+                                bgManager.backgroundActor.translation_x = 1.0;
                             }
                             const effect = widget.get_effect('blur');
                             if (effect) {
@@ -2701,6 +2726,15 @@ export default class QPatcherExtension extends Extension {
                     };
                 }
 
+                if (!this._origUnlockDialogShowPrompt && proto._showPrompt) {
+                    this._origUnlockDialogShowPrompt = proto._showPrompt;
+                    const self = this;
+                    proto._showPrompt = function() {
+                        self._origUnlockDialogShowPrompt.call(this);
+                        self._applyMultiMonitorFixToDialog(this);
+                    };
+                }
+
                 if (!this._origUnlockDialogFail && proto._fail) {
                     this._origUnlockDialogFail = proto._fail;
                     const self = this;
@@ -2725,6 +2759,15 @@ export default class QPatcherExtension extends Extension {
                         const self = this;
                         dlg._showClock = function() {
                             origShowClock();
+                            self._applyMultiMonitorFixToDialog(dlg);
+                        };
+                    }
+                    if (!dlg._qpatcherShowPromptHooked && dlg._showPrompt) {
+                        dlg._qpatcherShowPromptHooked = true;
+                        const origShowPrompt = dlg._showPrompt.bind(dlg);
+                        const self = this;
+                        dlg._showPrompt = function() {
+                            origShowPrompt();
                             self._applyMultiMonitorFixToDialog(dlg);
                         };
                     }
@@ -2845,6 +2888,10 @@ export default class QPatcherExtension extends Extension {
             if (this._origUnlockDialogShowClock && UnlockDialogModule?.UnlockDialog?.prototype) {
                 UnlockDialogModule.UnlockDialog.prototype._showClock = this._origUnlockDialogShowClock;
                 this._origUnlockDialogShowClock = null;
+            }
+            if (this._origUnlockDialogShowPrompt && UnlockDialogModule?.UnlockDialog?.prototype) {
+                UnlockDialogModule.UnlockDialog.prototype._showPrompt = this._origUnlockDialogShowPrompt;
+                this._origUnlockDialogShowPrompt = null;
             }
             if (this._origUnlockDialogFail && UnlockDialogModule?.UnlockDialog?.prototype) {
                 UnlockDialogModule.UnlockDialog.prototype._fail = this._origUnlockDialogFail;
