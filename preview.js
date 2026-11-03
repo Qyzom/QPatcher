@@ -14,13 +14,13 @@ const app = new Adw.Application({
 
 app.connect("activate", () => {
     const window = new Adw.PreferencesWindow({ application: app });
-    window.set_title("QPatcher — Центр настройки рабочего стола");
+    window.set_title("QPatcher — Desktop Customization Center");
 
     const settings = new Gio.Settings({ schema_id: "org.gnome.shell.extensions.qpatcher" });
     const interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
 
 
-        // Акцентная подсветка переключателей switch:checked
+        // Accent highlight for switch:checked
         const accentMap = {
             'blue': '#3584e4',
             'teal': '#2190a4',
@@ -88,7 +88,7 @@ app.connect("activate", () => {
         const addOpacitySlider = (group, title, schemaKey) => {
             const row = new Adw.SpinRow({
                 title: _(title),
-                subtitle: _('Непрозрачность от 0% до 100%'),
+                subtitle: _('Opacity from 0% to 100%'),
                 adjustment: new Gtk.Adjustment({
                     lower: 0,
                     upper: 100,
@@ -106,8 +106,8 @@ app.connect("activate", () => {
 
         const addStyleCombo = (group, title, schemaKey) => {
             const model = new Gtk.StringList();
-            model.append(_('По умолчанию'));
-            model.append(_('Цвет темы / Прозрачность'));
+            model.append(_('Default'));
+            model.append(_('Theme Color / Transparency'));
 
             const styles = ['default', 'theme-grey'];
             const current = settings.get_string(schemaKey);
@@ -138,7 +138,7 @@ app.connect("activate", () => {
                     while ((match = regex.exec(text)) !== null) {
                         const conn = match[1];
                         const isPrimary = match[2].includes('<primary>yes</primary>');
-                        list.push(`Монитор ${idx} (${conn}${isPrimary ? ', Основной' : ''})`);
+                        list.push(`Monitor ${idx} (${conn}${isPrimary ? ', Primary' : ''})`);
                         idx++;
                     }
                 }
@@ -150,7 +150,7 @@ app.connect("activate", () => {
                     const monitors = display?.get_monitors();
                     const count = monitors ? monitors.get_n_items() : 0;
                     for (let i = 0; i < count; i++) {
-                        list.push(`Монитор ${i + 1}`);
+                        list.push(`Monitor ${i + 1}`);
                     }
                 } catch (_) {}
             }
@@ -159,7 +159,7 @@ app.connect("activate", () => {
 
 
         // ==========================================
-        // НАВИГАЦИОННЫЙ САЙДБАР (VERTICAL NAVIGATION)
+        // NAVIGATION SIDEBAR (VERTICAL NAVIGATION)
         // ==========================================
         window.set_default_size(960, 680);
 
@@ -168,7 +168,7 @@ app.connect("activate", () => {
             max_sidebar_width: 290,
         });
 
-        // Боковая панель (сайдбар)
+        // Sidebar panel
         const sidebarPage = new Adw.NavigationPage({
             title: 'QPatcher',
             tag: 'sidebar',
@@ -190,9 +190,9 @@ app.connect("activate", () => {
         sidebarPage.set_child(sidebarToolbar);
         splitView.set_sidebar(sidebarPage);
 
-        // Основная область контента
+        // Main content area
         const contentPage = new Adw.NavigationPage({
-            title: _('Топбар'),
+            title: _('Top Bar'),
             tag: 'content',
         });
         const contentToolbar = new Adw.ToolbarView();
@@ -223,27 +223,27 @@ app.connect("activate", () => {
         };
 
         // ==========================================
-        // 1. ВКЛАДКА: ТОПБАР
+        // 1. TAB: TOP BAR
         // ==========================================
         const pageTopbar = new Adw.PreferencesPage({
-            title: _('Топбар'),
+            title: _('Top Bar'),
             icon_name: 'preferences-desktop-display-symbolic',
         });
-        addSection('topbar', 'Топбар', 'preferences-desktop-display-symbolic', pageTopbar);
+        addSection('topbar', 'Top Bar', 'preferences-desktop-display-symbolic', pageTopbar);
 
         const monitorGroup = new Adw.PreferencesGroup({
-            title: _('Монитор топбара'),
-            description: _('Выбор физического дисплея для верхней панели'),
+            title: _('Top Bar Monitor'),
+            description: _('Select physical display for the top panel'),
         });
         pageTopbar.add(monitorGroup);
 
         const monitorModel = new Gtk.StringList();
-        monitorModel.append(_('Основной экран'));
+        monitorModel.append(_('Primary Monitor'));
         const detectedMons = getMonitorNames();
         detectedMons.forEach(m => monitorModel.append(m));
 
         const monitorRow = new Adw.ComboRow({
-            title: _('Дисплей для панели'),
+            title: _('Panel Display'),
             model: monitorModel,
             selected: Math.min(settings.get_int('topbar-monitor'), monitorModel.get_n_items() - 1),
         });
@@ -253,67 +253,67 @@ app.connect("activate", () => {
         monitorGroup.add(monitorRow);
 
         const langClockGroup = new Adw.PreferencesGroup({
-            title: _('Языковой индикатор и часы'),
+            title: _('Language Indicator and Clock'),
         });
         pageTopbar.add(langClockGroup);
 
-        addSwitch(langClockGroup, 'Заглавные буквы раскладки (RU)', 'Писать код языка заглавными (никогда не сбрасывается)', 'keyboard-uppercase');
-        addSwitch(langClockGroup, 'Отображать день недели', 'Добавить короткий день недели к часам', 'clock-show-weekday');
-        addSwitch(langClockGroup, 'Отображать секунды', 'Показывать секунды в часах верхней панели', 'clock-show-seconds');
+        addSwitch(langClockGroup, 'Uppercase Layout (RU)', 'Display language code in uppercase (never resets)', 'keyboard-uppercase');
+        addSwitch(langClockGroup, 'Show Day of Week', 'Add abbreviated day of the week to clock', 'clock-show-weekday');
+        addSwitch(langClockGroup, 'Show Seconds', 'Show seconds in top bar clock', 'clock-show-seconds');
 
         const topbarColorGroup = new Adw.PreferencesGroup({
-            title: _('Фон и стиль топбара'),
+            title: _('Top Bar Background and Style'),
         });
         pageTopbar.add(topbarColorGroup);
 
-        addStyleCombo(topbarColorGroup, 'Стиль фона', 'topbar-style');
-        addOpacitySlider(topbarColorGroup, 'Прозрачность топбара', 'topbar-opacity');
-        addSwitch(topbarColorGroup, 'Прозрачная подложка в обзоре', 'Плавно скрывать фон панели при переходе в обзор', 'topbar-transparent-in-overview');
+        addStyleCombo(topbarColorGroup, 'Background Style', 'topbar-style');
+        addOpacitySlider(topbarColorGroup, 'Top Bar Opacity', 'topbar-opacity');
+        addSwitch(topbarColorGroup, 'Transparent in Overview', 'Smoothly fade panel background when entering overview', 'topbar-transparent-in-overview');
 
         const topbarVisibilityGroup = new Adw.PreferencesGroup({
-            title: _('Видимость элементов панели'),
+            title: _('Panel Elements Visibility'),
         });
         pageTopbar.add(topbarVisibilityGroup);
 
-        addSwitch(topbarVisibilityGroup, 'Верхняя панель', null, 'panel-visibility');
-        addSwitch(topbarVisibilityGroup, 'Кнопка «Обзор»', null, 'activities-button');
-        addSwitch(topbarVisibilityGroup, 'Часы и дата', null, 'clock-menu');
-        addSwitch(topbarVisibilityGroup, 'Меню доступности', null, 'accessibility-menu');
-        addSwitch(topbarVisibilityGroup, 'Меню «Быстрые настройки»', null, 'quicksettings-button');
+        addSwitch(topbarVisibilityGroup, 'Top Panel', null, 'panel-visibility');
+        addSwitch(topbarVisibilityGroup, 'Activities Button', null, 'activities-button');
+        addSwitch(topbarVisibilityGroup, 'Clock and Date', null, 'clock-menu');
+        addSwitch(topbarVisibilityGroup, 'Accessibility Menu', null, 'accessibility-menu');
+        addSwitch(topbarVisibilityGroup, 'Quick Settings Menu', null, 'quicksettings-button');
 
 
         // ==========================================
-        // 2. ВКЛАДКА: ДОК (DASH & DOCK)
+        // 2. TAB: DASH & DOCK
         // ==========================================
         const pageDock = new Adw.PreferencesPage({
-            title: _('Док-панель'),
+            title: _('Dock'),
             icon_name: 'view-app-grid-symbolic',
         });
-        addSection('dock', 'Док-панель', 'view-app-grid-symbolic', pageDock);
+        addSection('dock', 'Dock', 'view-app-grid-symbolic', pageDock);
 
         const dockFeaturesGroup = new Adw.PreferencesGroup({
-            title: _('Элементы и поведение дока'),
-            description: _('Тонкая настройка Dash, закрепление и анимации'),
+            title: _('Dock Elements and Behavior'),
+            description: _('Fine-tune Dash, desktop pinning, and animations'),
         });
         pageDock.add(dockFeaturesGroup);
 
-        const rowAlwaysVisible = addSwitch(dockFeaturesGroup, 'Показывать док на рабочем столе', 'Закрепить док на рабочем столе с резервированием пространства', 'dock-always-visible');
-        const rowIntellihide = addSwitch(dockFeaturesGroup, 'Интеллектуальное скрытие', 'Прятать док, если его перекрывает окно приложения', 'dock-intellihide');
+        const rowAlwaysVisible = addSwitch(dockFeaturesGroup, 'Show Dock on Desktop', 'Pin dock to desktop and reserve desktop space', 'dock-always-visible');
+        const rowIntellihide = addSwitch(dockFeaturesGroup, 'Intellihide', 'Hide dock when overlapped by any window', 'dock-intellihide');
         rowIntellihide.sensitive = rowAlwaysVisible.active;
         rowAlwaysVisible.connect('notify::active', () => {
             rowIntellihide.sensitive = rowAlwaysVisible.active;
         });
 
-        addSwitch(dockFeaturesGroup, 'Анимация увеличения иконок (macOS Magnification)', 'Иконки эффектно увеличиваются и приподнимаются при наведении', 'dock-magnification');
-        addSwitch(dockFeaturesGroup, 'Цвет счетчика в цвет акцента', 'Окрашивать бейдж уведомлений в акцентный цвет вместо красного', 'dock-notification-badge-accent');
-        const rowBar = addSwitch(dockFeaturesGroup, 'Одиночная полоска активности', 'Отображать одну полоску под активными приложениями вместо точек', 'dock-running-indicator-bar');
-        addSwitch(dockFeaturesGroup, 'Отображать съемные носители и диски', 'Показывать подключенные USB-флешки и смонтированные накопители', 'dock-show-mounts');
-        addSwitch(dockFeaturesGroup, 'Отображать корзину', 'Показывать иконку корзины в доке', 'dock-show-trash');
-        addSwitch(dockFeaturesGroup, 'Скрыть счетчик уведомлений', 'Не отображать бейдж с количеством уведомлений на иконках', 'dock-notification-badge-hide');
-        addSwitch(dockFeaturesGroup, 'Скрыть всплывающие подсказки', 'Отключить всплывающие подписи при наведении мыши', 'dock-tooltips-hide');
-        addSwitch(dockFeaturesGroup, 'Скрыть разделитель', 'Скрыть полосу между избранными и запущенными', 'dock-separator-hide');
-        addSwitch(dockFeaturesGroup, 'Скрыть кнопку приложений', 'Скрыть иконку сетки (девять точек)', 'dock-show-apps-hide');
-        const rowHideDots = addSwitch(dockFeaturesGroup, 'Скрыть индикаторы активности', 'Полностью скрыть любые метки активности под программами', 'dock-running-dots-hide');
+        addSwitch(dockFeaturesGroup, 'Icon Hover Magnification (macOS Style)', 'Smoothly magnify and lift icons on mouse hover', 'dock-magnification');
+        addSwitch(dockFeaturesGroup, 'Notification Badge Accent Color', 'Color unread notification badges with accent color instead of red', 'dock-notification-badge-accent');
+        const rowBar = addSwitch(dockFeaturesGroup, 'Single Running Indicator Bar', 'Show a single accent bar under active apps instead of dots', 'dock-running-indicator-bar');
+        addSwitch(dockFeaturesGroup, 'Show Removable Media and Drives', 'Show mounted USB flash drives and storage devices in dock', 'dock-show-mounts');
+        addSwitch(dockFeaturesGroup, 'Show Trash Bin', 'Show Trash bin icon in dock', 'dock-show-trash');
+        addSwitch(dockFeaturesGroup, 'Hide Notification Badges', 'Do not display badge with notification count on icons', 'dock-notification-badge-hide');
+        addSwitch(dockFeaturesGroup, 'Hide Icon Tooltips', 'Disable hover tooltip labels on icons', 'dock-tooltips-hide');
+        addSwitch(dockFeaturesGroup, 'Hide Separator', 'Hide divider line between favorites and running apps', 'dock-separator-hide');
+        addSwitch(dockFeaturesGroup, 'Hide Applications Button', 'Hide app grid icon (nine dots)', 'dock-show-apps-hide');
+        const rowHideDots = addSwitch(dockFeaturesGroup, 'Hide Running Indicators', 'Completely hide running indicators under apps', 'dock-running-dots-hide');
 
         rowBar.sensitive = !rowHideDots.active;
         rowHideDots.connect('notify::active', () => {
@@ -321,12 +321,12 @@ app.connect("activate", () => {
         });
 
         const dockSizeGroup = new Adw.PreferencesGroup({
-            title: _('Размер иконок дока'),
+            title: _('Dock Icon Size'),
         });
         pageDock.add(dockSizeGroup);
 
         const iconSizeRow = new Adw.SpinRow({
-            title: _('Размер иконок (px)'),
+            title: _('Icon Size (px)'),
             adjustment: new Gtk.Adjustment({ lower: 24, upper: 96, step_increment: 4, page_increment: 8, value: settings.get_int('dock-icon-size') }),
         });
         iconSizeRow.connect('notify::value', () => {
@@ -335,26 +335,26 @@ app.connect("activate", () => {
         dockSizeGroup.add(iconSizeRow);
 
         const dockStyleGroup = new Adw.PreferencesGroup({
-            title: _('Стиль подложки дока'),
+            title: _('Dock Background Style'),
         });
         pageDock.add(dockStyleGroup);
 
-        addStyleCombo(dockStyleGroup, 'Стиль фона дока', 'dock-style');
-        addOpacitySlider(dockStyleGroup, 'Прозрачность дока', 'dock-opacity');
+        addStyleCombo(dockStyleGroup, 'Dock Background Style', 'dock-style');
+        addOpacitySlider(dockStyleGroup, 'Dock Opacity', 'dock-opacity');
 
         const dockMonitorGroup = new Adw.PreferencesGroup({
-            title: _('Дисплей для док-панели'),
-            description: _('Выбор экрана, на котором располагается док'),
+            title: _('Dock Display and Position'),
+            description: _('Select display where the dock is located'),
         });
         pageDock.add(dockMonitorGroup);
 
         const dockMonitorModel = new Gtk.StringList();
-        dockMonitorModel.append(_('Как у верхней панели'));
+        dockMonitorModel.append(_('Follow Top Bar'));
         detectedMons.forEach(m => dockMonitorModel.append(m));
-        dockMonitorModel.append(_('На всех экранах'));
+        dockMonitorModel.append(_('On All Screens'));
 
         const dockMonitorRow = new Adw.ComboRow({
-            title: _('Расположение дока'),
+            title: _('Dock Position'),
             model: dockMonitorModel,
             selected: Math.min(settings.get_int('dock-monitor'), dockMonitorModel.get_n_items() - 1),
         });
@@ -365,56 +365,56 @@ app.connect("activate", () => {
 
 
         // ==========================================
-        // 3. ВКЛАДКА: ОБЗОР (OVERVIEW)
+        // 3. TAB: OVERVIEW & WINDOWS
         // ==========================================
         const pageOverview = new Adw.PreferencesPage({
-            title: _('Овервью и окна'),
+            title: _('Overview and Windows'),
             icon_name: 'view-grid-symbolic',
         });
-        addSection('overview', 'Овервью и окна', 'view-grid-symbolic', pageOverview);
+        addSection('overview', 'Overview and Windows', 'view-grid-symbolic', pageOverview);
 
         const overviewStyleGroup = new Adw.PreferencesGroup({
-            title: _('Фон режима обзора (Overview)'),
-            description: _('Настройка фона режима обзора'),
+            title: _('Overview Background'),
+            description: _('Configure overview mode background'),
         });
         pageOverview.add(overviewStyleGroup);
 
-        addStyleCombo(overviewStyleGroup, 'Стиль фона обзора', 'overview-style');
-        addOpacitySlider(overviewStyleGroup, 'Прозрачность фона обзора', 'overview-opacity');
+        addStyleCombo(overviewStyleGroup, 'Overview Background Style', 'overview-style');
+        addOpacitySlider(overviewStyleGroup, 'Overview Background Opacity', 'overview-opacity');
 
         const overviewElementsGroup = new Adw.PreferencesGroup({
-            title: _('Элементы режима обзора и окон'),
+            title: _('Overview and Window Elements'),
         });
         pageOverview.add(overviewElementsGroup);
 
-        addSwitch(overviewElementsGroup, 'Скрыть кнопку закрытия окон (крестик)', null, 'overview-window-close-button-hide');
-        addSwitch(overviewElementsGroup, 'Скрыть иконку приложения на окне', null, 'overview-window-icon-hide');
-        addSwitch(overviewElementsGroup, 'Скрыть заголовок окна', 'Полное скрытие заголовка без пустых черных рамок', 'overview-window-title-hide');
-        addSwitch(overviewElementsGroup, 'Скрыть строку поиска', null, 'overview-search-hide');
-        addSwitch(overviewElementsGroup, 'Скрыть миниатюры рабочих столов', null, 'overview-workspace-switcher-hide');
+        addSwitch(overviewElementsGroup, 'Hide Window Close Button (X)', null, 'overview-window-close-button-hide');
+        addSwitch(overviewElementsGroup, 'Hide Window App Icon', null, 'overview-window-icon-hide');
+        addSwitch(overviewElementsGroup, 'Hide Window Title', 'Completely hide title without empty black frames', 'overview-window-title-hide');
+        addSwitch(overviewElementsGroup, 'Hide Search Bar', null, 'overview-search-hide');
+        addSwitch(overviewElementsGroup, 'Hide Workspace Thumbnails', null, 'overview-workspace-switcher-hide');
 
 
         // ==========================================
-        // 4. ВКЛАДКА: УВЕДОМЛЕНИЯ (NOTIFICATIONS)
+        // 4. TAB: NOTIFICATIONS & OSD
         // ==========================================
         const pageNotifications = new Adw.PreferencesPage({
-            title: _('Уведомления и OSD'),
+            title: _('Notifications and OSD'),
             icon_name: 'preferences-system-notifications-symbolic',
         });
-        addSection('notifications', 'Уведомления и OSD', 'preferences-system-notifications-symbolic', pageNotifications);
+        addSection('notifications', 'Notifications and OSD', 'preferences-system-notifications-symbolic', pageNotifications);
 
         const notifPositionGroup = new Adw.PreferencesGroup({
-            title: _('Расположение всплывающих уведомлений'),
-            description: _('Выбор монитора и горизонтального положения баннера'),
+            title: _('Notification Popups Position'),
+            description: _('Select monitor and horizontal alignment for banners'),
         });
         pageNotifications.add(notifPositionGroup);
 
         const notifMonitorModel = new Gtk.StringList();
-        notifMonitorModel.append(_('Основной экран'));
+        notifMonitorModel.append(_('Primary Monitor'));
         detectedMons.forEach(m => notifMonitorModel.append(m));
 
         const notifMonitorRow = new Adw.ComboRow({
-            title: _('Монитор для баннеров'),
+            title: _('Monitor for Banners'),
             model: notifMonitorModel,
             selected: Math.min(settings.get_int('notification-monitor'), notifMonitorModel.get_n_items() - 1),
         });
@@ -424,13 +424,13 @@ app.connect("activate", () => {
         notifPositionGroup.add(notifMonitorRow);
 
         const hAlignModel = new Gtk.StringList();
-        hAlignModel.append(_('По центру'));
-        hAlignModel.append(_('Слева'));
-        hAlignModel.append(_('Справа'));
+        hAlignModel.append(_('Center'));
+        hAlignModel.append(_('Left'));
+        hAlignModel.append(_('Right'));
         const hAlignValues = ['center', 'left', 'right'];
 
         const hAlignRow = new Adw.ComboRow({
-            title: _('Положение по горизонтали'),
+            title: _('Horizontal Alignment'),
             model: hAlignModel,
             selected: Math.max(0, hAlignValues.indexOf(settings.get_string('notification-horizontal-alignment'))),
         });
@@ -440,23 +440,23 @@ app.connect("activate", () => {
         notifPositionGroup.add(hAlignRow);
 
         const notifStyleGroup = new Adw.PreferencesGroup({
-            title: _('Стиль баннера уведомлений'),
+            title: _('Notification Banner Style'),
         });
         pageNotifications.add(notifStyleGroup);
 
-        addStyleCombo(notifStyleGroup, 'Стиль фона плашки', 'notification-style');
-        addOpacitySlider(notifStyleGroup, 'Прозрачность плашки', 'notification-opacity');
+        addStyleCombo(notifStyleGroup, 'Banner Background Style', 'notification-style');
+        addOpacitySlider(notifStyleGroup, 'Banner Opacity', 'notification-opacity');
 
         const notifOptionsGroup = new Adw.PreferencesGroup({
-            title: _('Дополнительные параметры'),
+            title: _('Additional Banner Options'),
         });
         pageNotifications.add(notifOptionsGroup);
 
-        addSwitch(notifOptionsGroup, 'Скрыть кнопку закрытия (крестик) на баннере', null, 'notification-close-button-hide');
-        addSwitch(notifOptionsGroup, 'Скрыть иконку уведомлений в верхней панели', null, 'panel-notification-icon-hide');
+        addSwitch(notifOptionsGroup, 'Hide Banner Close Button (X)', null, 'notification-close-button-hide');
+        addSwitch(notifOptionsGroup, 'Hide Top Bar Notification Icon', null, 'panel-notification-icon-hide');
 
         const timeoutRow = new Adw.SpinRow({
-            title: _('Время показа баннера (секунды)'),
+            title: _('Banner Timeout (seconds)'),
             adjustment: new Gtk.Adjustment({ lower: 1, upper: 20, step_increment: 1, page_increment: 2, value: settings.get_int('notification-timeout') }),
         });
         timeoutRow.connect('notify::value', () => {
@@ -465,14 +465,14 @@ app.connect("activate", () => {
         notifOptionsGroup.add(timeoutRow);
 
         const osdGroup = new Adw.PreferencesGroup({
-            title: _('Индикаторы громкости и яркости (OSD)'),
-            description: _('Всплывающие плашки при регулировке звука энкодером, клавишами или яркости'),
+            title: _('Volume and Brightness Indicators (OSD)'),
+            description: _('On-screen displays when adjusting volume with encoder, keys, or brightness'),
         });
         pageNotifications.add(osdGroup);
 
         const osdMonitorModel = new Gtk.StringList();
-        osdMonitorModel.append(_('Основной экран'));
-        osdMonitorModel.append(_('На всех экранах'));
+        osdMonitorModel.append(_('Primary Monitor'));
+        osdMonitorModel.append(_('On All Screens'));
         const osdMonitorValues = [0, -1];
 
         detectedMons.forEach((m, idx) => {
@@ -484,7 +484,7 @@ app.connect("activate", () => {
         const osdSelectedIdx = osdMonitorValues.indexOf(currentOsdVal);
 
         const osdMonitorRow = new Adw.ComboRow({
-            title: _('Монитор для индикатора громкости и яркости'),
+            title: _('Monitor for OSD'),
             model: osdMonitorModel,
             selected: osdSelectedIdx >= 0 ? osdSelectedIdx : 0,
         });
@@ -496,25 +496,25 @@ app.connect("activate", () => {
 
 
         // ==========================================
-        // 5. ШТОРКА (DATEMENU)
+        // 5. TAB: CALENDAR & CLOCK
         // ==========================================
         const pageDateMenu = new Adw.PreferencesPage({
-            title: _('Календарь и часы'),
+            title: _('Calendar and Clock'),
             icon_name: 'x-office-calendar-symbolic',
         });
-        addSection('datemenu', 'Календарь и часы', 'x-office-calendar-symbolic', pageDateMenu);
+        addSection('datemenu', 'Calendar and Clock', 'x-office-calendar-symbolic', pageDateMenu);
 
         const calendarGroup = new Adw.PreferencesGroup({
-            title: _('Календарь и секции шторки'),
-            description: _('Настройка элементов выпадающего меню часов'),
+            title: _('Calendar and Menu Sections'),
+            description: _('Configure clock dropdown menu elements'),
         });
         pageDateMenu.add(calendarGroup);
 
-        const rowHideRight = addSwitch(calendarGroup, 'Скрыть правую часть (Календарь и события)', 'Полностью скрыть правую колонку со всеми виджетами', 'datemenu-calendar-hide');
-        addSwitch(calendarGroup, 'Компактный режим при отсутствии уведомлений', 'Скрыть текст «Нет уведомлений» и центрировать иконку', 'datemenu-compact-empty');
-        const rowWeather = addSwitch(calendarGroup, 'Скрыть секцию погоды', null, 'datemenu-weather-hide');
-        const rowClocks = addSwitch(calendarGroup, 'Скрыть мировые часы', null, 'datemenu-world-clocks-hide');
-        const rowEvents = addSwitch(calendarGroup, 'Скрыть события', null, 'datemenu-events-hide');
+        const rowHideRight = addSwitch(calendarGroup, 'Hide Right Column (Calendar and Events)', 'Completely hide right column with all widgets', 'datemenu-calendar-hide');
+        addSwitch(calendarGroup, 'Compact Mode When No Notifications', 'Hide "No notifications" text and center the icon', 'datemenu-compact-empty');
+        const rowWeather = addSwitch(calendarGroup, 'Hide Weather Section', null, 'datemenu-weather-hide');
+        const rowClocks = addSwitch(calendarGroup, 'Hide World Clocks', null, 'datemenu-world-clocks-hide');
+        const rowEvents = addSwitch(calendarGroup, 'Hide Events', null, 'datemenu-events-hide');
 
         const updateRightSubRows = () => {
             const isRightHidden = rowHideRight.active;
@@ -526,74 +526,74 @@ app.connect("activate", () => {
         rowHideRight.connect('notify::active', updateRightSubRows);
 
         const dateMenuStyleGroup = new Adw.PreferencesGroup({
-            title: _('Стиль и фон шторки уведомлений'),
+            title: _('Notification Curtain Style and Background'),
         });
         pageDateMenu.add(dateMenuStyleGroup);
 
-        addStyleCombo(dateMenuStyleGroup, 'Стиль фона шторки', 'datemenu-style');
-        addOpacitySlider(dateMenuStyleGroup, 'Прозрачность фона шторки', 'datemenu-opacity');
+        addStyleCombo(dateMenuStyleGroup, 'Menu Background Style', 'datemenu-style');
+        addOpacitySlider(dateMenuStyleGroup, 'Menu Background Opacity', 'datemenu-opacity');
 
 
         // ==========================================
-        // 6. ВКЛАДКА: БЫСТРЫЕ НАСТРОЙКИ (QUICK SETTINGS)
+        // 6. TAB: QUICK SETTINGS
         // ==========================================
         const pageQuickSettings = new Adw.PreferencesPage({
-            title: _('Быстрые настройки'),
+            title: _('Quick Settings'),
             icon_name: 'emblem-system-symbolic',
         });
-        addSection('quicksettings', 'Быстрые настройки', 'emblem-system-symbolic', pageQuickSettings);
+        addSection('quicksettings', 'Quick Settings', 'emblem-system-symbolic', pageQuickSettings);
 
         const qsLayoutGroup = new Adw.PreferencesGroup({
-            title: _('Компоновка плиток'),
+            title: _('Tile Layout'),
         });
         pageQuickSettings.add(qsLayoutGroup);
 
-        addSwitch(qsLayoutGroup, 'Вытягивать нечетную карточку', 'Растягивать последнюю одиночную плитку на 2 колонки', 'quicksettings-full-width-toggle');
-        addSwitch(qsLayoutGroup, 'Фоновые приложения на всю ширину', 'Отображать блок фоновых приложений отдельной широкой строкой снизу вместо плитки в сетке', 'quicksettings-background-apps-full-width');
+        addSwitch(qsLayoutGroup, 'Stretch Odd Tile', 'Stretch the last single tile across 2 columns', 'quicksettings-full-width-toggle');
+        addSwitch(qsLayoutGroup, 'Full-Width Background Apps', 'Display background apps as a full-width bottom row instead of a grid tile', 'quicksettings-background-apps-full-width');
 
         const qsButtonsGroup = new Adw.PreferencesGroup({
-            title: _('Круглые системные кнопки'),
-            description: _('Прямое скрытие системных кнопок действий внизу шторки быстрых настроек'),
+            title: _('Round System Buttons'),
+            description: _('Directly hide system action buttons in Quick Settings'),
         });
         pageQuickSettings.add(qsButtonsGroup);
 
-        addSwitch(qsButtonsGroup, 'Скрыть кнопку выключения', null, 'qs-power-hide');
-        addSwitch(qsButtonsGroup, 'Скрыть кнопку скриншота', null, 'qs-screenshot-hide');
-        addSwitch(qsButtonsGroup, 'Скрыть кнопку параметров (шестеренку)', null, 'qs-settings-hide');
-        addSwitch(qsButtonsGroup, 'Скрыть кнопку блокировки экрана', null, 'qs-lock-hide');
+        addSwitch(qsButtonsGroup, 'Hide Power / Log Out Button', null, 'qs-power-hide');
+        addSwitch(qsButtonsGroup, 'Hide Screenshot Button', null, 'qs-screenshot-hide');
+        addSwitch(qsButtonsGroup, 'Hide Settings Button (Gear)', null, 'qs-settings-hide');
+        addSwitch(qsButtonsGroup, 'Hide Lock Screen Button', null, 'qs-lock-hide');
 
         const qsStyleGroup = new Adw.PreferencesGroup({
-            title: _('Стиль меню Quick Settings'),
+            title: _('Quick Settings Menu Style'),
         });
         pageQuickSettings.add(qsStyleGroup);
 
-        addStyleCombo(qsStyleGroup, 'Стиль подложки', 'quicksettings-style');
-        addOpacitySlider(qsStyleGroup, 'Прозрачность Quick Settings', 'quicksettings-opacity');
+        addStyleCombo(qsStyleGroup, 'Background Style', 'quicksettings-style');
+        addOpacitySlider(qsStyleGroup, 'Quick Settings Opacity', 'quicksettings-opacity');
 
 
         // ==========================================
-        // 7. ВКЛАДКА: СКРИНШОТЫ (SCREENSHOTS)
+        // 7. TAB: SCREENSHOTS
         // ==========================================
         const pageScreenshots = new Adw.PreferencesPage({
-            title: _('Скриншоты'),
+            title: _('Screenshots'),
             icon_name: 'applets-screenshooter-symbolic',
         });
-        addSection('screenshots', 'Скриншоты', 'applets-screenshooter-symbolic', pageScreenshots);
+        addSection('screenshots', 'Screenshots', 'applets-screenshooter-symbolic', pageScreenshots);
 
         const screenshotNamingGroup = new Adw.PreferencesGroup({
-            title: _('Имя и сохранение файлов'),
-            description: _('Настройка шаблона названия файлов и режима сохранения снимков'),
+            title: _('File Naming and Saving'),
+            description: _('File naming pattern and screenshot storage options'),
         });
         pageScreenshots.add(screenshotNamingGroup);
 
         const namingModel = new Gtk.StringList();
-        namingModel.append(_('Дата и время'));
-        namingModel.append(_('Случайное число'));
-        namingModel.append(_('По умолчанию'));
+        namingModel.append(_('Timestamp'));
+        namingModel.append(_('Random Number'));
+        namingModel.append(_('Default'));
         const namingValues = ['date', 'random', 'default'];
 
         const namingRow = new Adw.ComboRow({
-            title: _('Формат названия файла'),
+            title: _('File Naming Format'),
             model: namingModel,
             selected: Math.max(0, namingValues.indexOf(settings.get_string('screenshot-filename-format'))),
         });
@@ -602,15 +602,15 @@ app.connect("activate", () => {
         });
         screenshotNamingGroup.add(namingRow);
 
-        addSwitch(screenshotNamingGroup, 'Только буфер обмена', 'Копировать скриншот в буфер обмена без сохранения файла на диск', 'screenshot-clipboard-only');
+        addSwitch(screenshotNamingGroup, 'Copy to Clipboard Only', 'Copy screenshot to clipboard without saving file to disk', 'screenshot-clipboard-only');
 
         const saveLocModel = new Gtk.StringList();
-        saveLocModel.append(_('Подпапка «Снимки экрана»'));
-        saveLocModel.append(_('Папка «Изображения»'));
+        saveLocModel.append(_('Screenshots Subfolder'));
+        saveLocModel.append(_('Pictures Folder'));
         const saveLocValues = ['subfolder', 'pictures'];
 
         const saveLocRow = new Adw.ComboRow({
-            title: _('Папка для сохранения файлов'),
+            title: _('Save Destination Folder'),
             model: saveLocModel,
             selected: Math.max(0, saveLocValues.indexOf(settings.get_string('screenshot-save-location'))),
         });
@@ -620,19 +620,19 @@ app.connect("activate", () => {
         screenshotNamingGroup.add(saveLocRow);
 
         const screenshotSoundGroup = new Adw.PreferencesGroup({
-            title: _('Звук создания снимка'),
-            description: _('Выбор звукового эффекта при захвате экрана'),
+            title: _('Shutter Sound'),
+            description: _('Select audio effect when taking screenshot'),
         });
         pageScreenshots.add(screenshotSoundGroup);
 
         const soundModel = new Gtk.StringList();
-        soundModel.append(_('Щелчок камеры'));
-        soundModel.append(_('Мягкий клик'));
-        soundModel.append(_('Без звука'));
+        soundModel.append(_('Camera Shutter'));
+        soundModel.append(_('Soft Click'));
+        soundModel.append(_('Silent'));
         const soundValues = ['default', 'bubble', 'disabled'];
 
         const soundRow = new Adw.ComboRow({
-            title: _('Звук затвора'),
+            title: _('Shutter Sound'),
             model: soundModel,
             selected: Math.max(0, soundValues.indexOf(settings.get_string('screenshot-sound'))),
         });
@@ -642,40 +642,40 @@ app.connect("activate", () => {
         screenshotSoundGroup.add(soundRow);
 
         const screenshotUiGroup = new Adw.PreferencesGroup({
-            title: _('Интерфейс и скорость съемки'),
-            description: _('Поведение оверлея скриншотов при нажатии PrintScreen'),
+            title: _('Interface and Capture Speed'),
+            description: _('Screenshot overlay behavior on PrintScreen'),
         });
         pageScreenshots.add(screenshotUiGroup);
 
-        addSwitch(screenshotUiGroup, 'Показывать указатель мыши', 'Отображать курсор мыши на создаваемых скриншотах по умолчанию', 'screenshot-show-pointer');
-        addSwitch(screenshotUiGroup, 'Быстрый скриншот', 'Мгновенный снимок сразу после выделения области мышью (без нажатия Enter)', 'screenshot-quick-capture');
-        addSwitch(screenshotUiGroup, 'Сбросить область выделения', 'Не оставлять рамку выделения по умолчанию при открытии меню скриншота', 'screenshot-clear-selection');
-        addSwitch(screenshotUiGroup, 'Скрыть нижнее меню инструментов', 'Скрыть панель с кнопками «Область / Экран / Окно / Видео» для чистого экрана', 'screenshot-hide-panel');
+        addSwitch(screenshotUiGroup, 'Show Mouse Cursor', 'Display mouse cursor on screenshots by default', 'screenshot-show-pointer');
+        addSwitch(screenshotUiGroup, 'Quick Capture', 'Instant capture upon drag release without pressing Enter', 'screenshot-quick-capture');
+        addSwitch(screenshotUiGroup, 'Reset Selection Area', 'Do not keep default selection box when opening screenshot menu', 'screenshot-clear-selection');
+        addSwitch(screenshotUiGroup, 'Hide Bottom Tool Panel', 'Hide Area/Screen/Window/Video toolbar for a clean screen', 'screenshot-hide-panel');
 
 
         // ==========================================
-        // 8. ВКЛАДКА: БУФЕР ОБМЕНА И ЭМОДЗИ (CLIPBOARD & EMOJI)
+        // 8. TAB: CLIPBOARD & EMOJI
         // ==========================================
         const pageClipboard = new Adw.PreferencesPage({
-            title: _('Буфер и Эмодзи'),
+            title: _('Clipboard and Emoji'),
             icon_name: 'edit-paste-symbolic',
         });
-        addSection('clipboard', 'Буфер и эмодзи', 'edit-paste-symbolic', pageClipboard);
+        addSection('clipboard', 'Clipboard and Emoji', 'edit-paste-symbolic', pageClipboard);
 
         const clipboardGroup = new Adw.PreferencesGroup({
-            title: _('Буфер обмена и Эмодзи'),
-            description: _('Встроенный менеджер истории буфера обмена и панель выбора эмодзи'),
+            title: _('Clipboard and Emoji'),
+            description: _('Integrated clipboard history manager and emoji selector'),
         });
         pageClipboard.add(clipboardGroup);
 
-        addSwitch(clipboardGroup, 'Включить буфер обмена и эмодзи', 'Сохраняет историю буфера обмена и предоставляет всплывающее окно выбора', 'clipboard-enable');
-        addSwitch(clipboardGroup, 'Иконка в топбаре', 'Отображать значок буфера на верхней панели рядом со шторкой', 'clipboard-topbar-icon');
-        addSwitch(clipboardGroup, 'Автоматическая вставка при выборе', 'Автоматически вставляет скопированную запись или эмодзи сразу в активное окно', 'clipboard-auto-paste');
-        addSwitch(clipboardGroup, 'Очищать историю при перезагрузке', 'Очищает обычную историю при старте системы, сохраняя избранные (закреплённые) записи', 'clipboard-clear-on-reboot');
+        addSwitch(clipboardGroup, 'Enable Clipboard and Emoji', 'Store clipboard history and provide popup selector', 'clipboard-enable');
+        addSwitch(clipboardGroup, 'Top Bar Icon', 'Display clipboard icon on the top panel near date menu', 'clipboard-topbar-icon');
+        addSwitch(clipboardGroup, 'Auto-Paste on Selection', 'Automatically paste selected item or emoji into the active window', 'clipboard-auto-paste');
+        addSwitch(clipboardGroup, 'Clear History on Reboot', 'Clear unpinned history items on system start, preserving pinned items', 'clipboard-clear-on-reboot');
 
         const limitRow = new Adw.SpinRow({
-            title: _('Лимит истории буфера'),
-            subtitle: _('Количество сохраняемых записей в истории (от 10 до 500)'),
+            title: _('History Limit'),
+            subtitle: _('Maximum entries in history (from 10 to 500)'),
             adjustment: new Gtk.Adjustment({
                 lower: 10,
                 upper: 500,
@@ -690,8 +690,8 @@ app.connect("activate", () => {
         clipboardGroup.add(limitRow);
 
         const clipboardShortcutsGroup = new Adw.PreferencesGroup({
-            title: _('Горячие клавиши и внешний вызов'),
-            description: _('Глобальные сочетания клавиш и консольные команды для биндов'),
+            title: _('Shortcuts and External Launch'),
+            description: _('Global hotkeys and commands for custom keybindings'),
         });
         pageClipboard.add(clipboardShortcutsGroup);
 
@@ -725,7 +725,7 @@ app.connect("activate", () => {
                 const keys = settings.get_strv(schemaKey);
                 if (!keys || keys.length === 0) {
                     keysBox.append(new Gtk.Label({
-                        label: _('Не назначено'),
+                        label: _('Disabled'),
                         css_classes: ['dim-label'],
                     }));
                 } else {
@@ -746,7 +746,7 @@ app.connect("activate", () => {
                 icon_name: 'edit-undo-symbolic',
                 valign: Gtk.Align.CENTER,
                 has_frame: false,
-                tooltip_text: _('Сбросить на значение по умолчанию'),
+                tooltip_text: _('Reset to default'),
             });
             resetBtn.connect('clicked', () => {
                 settings.set_strv(schemaKey, defaultKeys);
@@ -758,36 +758,36 @@ app.connect("activate", () => {
         }
 
         clipboardShortcutsGroup.add(createShortcutRow(
-            _('Сочетание для истории буфера'),
-            _('Глобальный перехват GNOME Shell (активен во всех приложениях)'),
+            _('Clipboard History Shortcut'),
+            _('Global GNOME Shell shortcut (active across all apps)'),
             'clipboard-shortcut',
             ['<Super>v']
         ));
 
         clipboardShortcutsGroup.add(createShortcutRow(
-            _('Сочетание для эмодзи'),
-            _('Глобальный перехват GNOME Shell (активен во всех приложениях)'),
+            _('Emoji Picker Shortcut'),
+            _('Global GNOME Shell shortcut (active across all apps)'),
             'emoji-shortcut',
             ['<Super>period']
         ));
 
-        // Команда для скриптов / ручного бинда в GNOME Control Center
+        // Command for scripts / custom shortcuts in GNOME Settings
         function createCommandRow(title, subtitle, cmdText) {
             const row = new Adw.ActionRow({
                 title: title,
                 subtitle: subtitle,
             });
             const btn = new Gtk.Button({
-                label: _('Скопировать'),
+                label: _('Copy'),
                 valign: Gtk.Align.CENTER,
                 css_classes: ['suggested-action'],
             });
             btn.connect('clicked', () => {
                 const clipboard = Gdk.Display.get_default()?.get_clipboard();
                 clipboard?.set(cmdText);
-                btn.label = _('Скопировано!');
+                btn.label = _('Copied!');
                 GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
-                    btn.label = _('Скопировать');
+                    btn.label = _('Copy');
                     return GLib.SOURCE_REMOVE;
                 });
             });
@@ -796,47 +796,47 @@ app.connect("activate", () => {
         }
 
         clipboardShortcutsGroup.add(createCommandRow(
-            _('Команда вызова буфера обмена'),
+            _('Clipboard Open Command'),
             'qpatcher-clipboard',
             'qpatcher-clipboard'
         ));
 
         clipboardShortcutsGroup.add(createCommandRow(
-            _('Команда вызова эмодзи'),
+            _('Emoji Picker Open Command'),
             'qpatcher-emoji',
             'qpatcher-emoji'
         ));
 
         clipboardShortcutsGroup.add(createCommandRow(
-            _('Прямой D-Bus вызов (без PATH)'),
+            _('Direct D-Bus Call (without PATH)'),
             _('gdbus call --session --dest org.gnome.Shell ...'),
             `gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell/Extensions/QPatcher --method org.gnome.Shell.Extensions.QPatcher.OpenClipboard 'clipboard'`
         ));
 
 
         // ==========================================
-        // 9. ВКЛАДКА: ПРОЧЕЕ (SYSTEM & THEME)
+        // 9. TAB: APPEARANCE & SYSTEM
         // ==========================================
         const pageOther = new Adw.PreferencesPage({
-            title: _('Внешний вид и система'),
+            title: _('Appearance and System'),
             icon_name: 'preferences-other-symbolic',
         });
-        addSection('other', 'Внешний вид и система', 'preferences-other-symbolic', pageOther);
+        addSection('other', 'Appearance and System', 'preferences-other-symbolic', pageOther);
 
         const themeColorGroup = new Adw.PreferencesGroup({
-            title: _('Единый цвет темы (Theme Color)'),
-            description: _('Базовый оттенок для всех панелей, меню и подложек'),
+            title: _('Unified Theme Color'),
+            description: _('Base background color for all panels, menus, and dialogs'),
         });
         pageOther.add(themeColorGroup);
 
-        addSwitch(themeColorGroup, 'Перекрашивать все меню и диалоги', 'Применять единый цвет темы к контекстным меню, языку и системным окнам', 'recolor-all-menus-and-dialogs');
-        addStyleCombo(themeColorGroup, 'Стиль меню и диалогов', 'menus-dialogs-style');
+        addSwitch(themeColorGroup, 'Recolor All Menus and Dialogs', 'Apply unified theme color to context menus, language popups, and dialogs', 'recolor-all-menus-and-dialogs');
+        addStyleCombo(themeColorGroup, 'Menus and Dialogs Style', 'menus-dialogs-style');
 
         let curColor = (settings.get_string('theme-color') || '').trim();
         if (!curColor.startsWith('#')) curColor = '#232326';
         const paletteActionRow = new Adw.ActionRow({
-            title: _('Готовая палитра темных и нейтральных оттенков'),
-            subtitle: _(`Текущий цвет: ${curColor}`),
+            title: _('Curated Dark and Neutral Presets'),
+            subtitle: _(`Current color: ${curColor}`),
         });
         themeColorGroup.add(paletteActionRow);
 
@@ -883,28 +883,28 @@ app.connect("activate", () => {
             btn.connect('clicked', () => {
                 settings.set_string('theme-color', p.hex);
                 settings.set_string('theme-card-color', '');
-                paletteActionRow.subtitle = _(`Текущий цвет: ${p.name} (${p.hex})`);
+                paletteActionRow.subtitle = _(`Current color: ${p.name} (${p.hex})`);
             });
             paletteGrid.append(btn);
         });
 
         const accentGroup = new Adw.PreferencesGroup({
-            title: _('Системный акцентный цвет (GNOME Native)'),
-            description: _('Официальная палитра акцентных цветов системы'),
+            title: _('System Accent Color (GNOME Native)'),
+            description: _('Official system accent color palette'),
         });
         pageOther.add(accentGroup);
 
         const accentNames = ['blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'];
         const accentLabels = [
-            _('Синий'),
-            _('Бирюзовый'),
-            _('Зелёный'),
-            _('Жёлтый'),
-            _('Оранжевый'),
-            _('Красный'),
-            _('Розовый'),
-            _('Фиолетовый'),
-            _('Серый'),
+            _('Blue'),
+            _('Teal'),
+            _('Green'),
+            _('Yellow'),
+            _('Orange'),
+            _('Red'),
+            _('Pink'),
+            _('Purple'),
+            _('Slate'),
         ];
 
         const accentModel = new Gtk.StringList();
@@ -912,7 +912,7 @@ app.connect("activate", () => {
 
         const currentAccent = interfaceSettings.get_string('accent-color') || 'blue';
         const accentRow = new Adw.ComboRow({
-            title: _('Акцентный цвет оформления'),
+            title: _('Accent Color'),
             model: accentModel,
             selected: Math.max(0, accentNames.indexOf(currentAccent)),
         });
@@ -927,25 +927,25 @@ app.connect("activate", () => {
         accentGroup.add(accentRow);
 
         const systemThemeGroup = new Adw.PreferencesGroup({
-            title: _('Глобальные темы оформления'),
-            description: _('Быстрое переключение системных режимов'),
+            title: _('Global Appearance Themes'),
+            description: _('Fast system color scheme switching'),
         });
         pageOther.add(systemThemeGroup);
 
-        addSwitch(systemThemeGroup, 'Тёмный стиль (Dark Style)', 'Использовать системную тёмную тему', 'dark-mode');
+        addSwitch(systemThemeGroup, 'Dark Style', 'Use system dark style', 'dark-mode');
 
         const lockGroup = new Adw.PreferencesGroup({
-            title: _('Экран блокировки и входа (Lock Screen / Login)'),
-            description: _('Поведение экрана блокировки и экрана авторизации'),
+            title: _('Lock Screen and Login'),
+            description: _('Lock screen and authorization behavior'),
         });
         pageOther.add(lockGroup);
 
-        addSwitch(lockGroup, 'Патчить топбар и стиль на экране блокировки', 'Переносит топбар на выбранный монитор и сохраняет заглавный язык и стили', 'lockscreen-topbar-enable');
-        addSwitch(lockGroup, 'Сразу открывать ввод пароля (без шторы часов)', 'Автоматически пропускает экран с часами на локскрине и сразу активирует поле ввода', 'lockscreen-auto-focus-password');
-        addSwitch(lockGroup, 'Не тушить экран при блокировке (Win+L)', 'Оставляет экран блокировки с часами и обоями включенным, не выключая мониторы', 'lockscreen-prevent-blank');
-        addSwitch(lockGroup, 'Блокировать экран при автологине (Boot Lock)', 'Если в GDM включен автоматический вход, система при загрузке сразу покажет кастомный экран блокировки', 'autologin-lock-on-boot');
+        addSwitch(lockGroup, 'Patch Top Bar and Styling on Lock Screen', 'Moves top bar to chosen monitor and preserves uppercase layout and styles', 'lockscreen-topbar-enable');
+        addSwitch(lockGroup, 'Direct Password Prompt (Skip Clock Curtain)', 'Automatically bypass lock screen curtain and focus password field', 'lockscreen-auto-focus-password');
+        addSwitch(lockGroup, 'Keep Monitors Awake on Lock (Win+L)', 'Keeps lock screen with clock and wallpaper awake without turning off displays', 'lockscreen-prevent-blank');
+        addSwitch(lockGroup, 'Lock Screen on Auto-login (Boot Lock)', 'If GDM auto-login is enabled, immediately shows lock screen on system boot', 'autologin-lock-on-boot');
 
-        // Обработка переключения разделов сайдбара
+        // Handle sidebar section switching
         sidebarListBox.connect('row-selected', (_box, row) => {
             if (row && row._tag) {
                 stack.set_visible_child_name(row._tag);

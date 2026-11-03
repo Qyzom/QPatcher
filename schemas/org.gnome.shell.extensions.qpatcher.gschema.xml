@@ -3,7 +3,7 @@
   <schema id="org.gnome.shell.extensions.qpatcher" path="/org/gnome/shell/extensions/qpatcher/">
 
     <!-- ========================================== -->
-    <!-- 1. ТОПБАР (TOPBAR)                         -->
+    <!-- 1. TOP BAR                                   -->
     <!-- ========================================== -->
     <key name="topbar-monitor" type="i">
       <default>0</default>
@@ -79,7 +79,7 @@
 
 
     <!-- ========================================== -->
-    <!-- 2. ДОК (DASH & DOCK)                       -->
+    <!-- 2. DOCK (DASH & DOCK)                         -->
     <!-- ========================================== -->
     <key name="dock-separator-hide" type="b">
       <default>false</default>
@@ -173,7 +173,7 @@
 
 
     <!-- ========================================== -->
-    <!-- 3. ОБЗОР (OVERVIEW)                        -->
+    <!-- 3. OVERVIEW & WINDOWS                         -->
     <!-- ========================================== -->
     <key name="overview-style" type="s">
       <default>'default'</default>
@@ -219,7 +219,7 @@
 
 
     <!-- ========================================== -->
-    <!-- 4. УВЕДОМЛЕНИЯ (NOTIFICATIONS)             -->
+    <!-- 4. NOTIFICATIONS & OSD                        -->
     <!-- ========================================== -->
     <key name="notification-monitor" type="i">
       <default>0</default>
@@ -271,7 +271,7 @@
 
 
     <!-- ========================================== -->
-    <!-- 5. ШТОРКА (DATEMENU)                       -->
+    <!-- 5. CALENDAR & DATEMENU                        -->
     <!-- ========================================== -->
     <key name="datemenu-calendar-hide" type="b">
       <default>false</default>
@@ -317,7 +317,7 @@
 
 
     <!-- ========================================== -->
-    <!-- 6. БЫСТРЫЕ НАСТРОЙКИ (QUICK SETTINGS)       -->
+    <!-- 6. QUICK SETTINGS                            -->
     <!-- ========================================== -->
     <key name="quicksettings-full-width-toggle" type="b">
       <default>false</default>
@@ -369,7 +369,7 @@
 
 
     <!-- ========================================== -->
-    <!-- 7. ПРОЧЕЕ (SYSTEM & THEME)                  -->
+    <!-- 7. SYSTEM & THEME                            -->
     <!-- ========================================== -->
     <key name="theme-color" type="s">
       <default>'#232326'</default>
@@ -427,7 +427,7 @@
 
 
     <!-- ========================================== -->
-    <!-- 8. СКРИНШОТЫ (SCREENSHOTS)                 -->
+    <!-- 8. SCREENSHOTS                               -->
     <!-- ========================================== -->
     <key name="screenshot-filename-format" type="s">
       <default>'date'</default>
@@ -478,7 +478,7 @@
     </key>
 
     <!-- ========================================== -->
-    <!-- 9. БУФЕР ОБМЕНА И ЭМОДЗИ (CLIPBOARD & EMOJI) -->
+    <!-- 9. CLIPBOARD & EMOJI                           -->
     <!-- ========================================== -->
     <key name="clipboard-enable" type="b">
       <default>true</default>

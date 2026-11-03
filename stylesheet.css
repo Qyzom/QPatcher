@@ -3,10 +3,10 @@
 /* QPatcher Master Stylesheet — Clean, Fast, Bulletproof */
 
 /* =================================================== */
-/* 1. ТОПБАР                                           */
+/* 1. TOP BAR                                           */
 /* =================================================== */
 
-/* Удаление паразитных теней, границ и обводок */
+/* Remove stray shadows, borders, and outlines */
 #panel {
     border: none !important;
     box-shadow: none !important;
@@ -35,7 +35,7 @@
     border: none !important;
 }
 
-/* Скрытие иконки уведомлений на часах */
+/* Hide notification bell icon on clock */
 .qpatcher-hide-panel-notification-icon #panel .message-counter,
 .qpatcher-hide-panel-notification-icon #panel .notification-badge {
     display: none !important;
@@ -43,9 +43,11 @@
     height: 0 !important;
 }
 
-/* Скрытие меню доступности ("человечек") */
+/* Hide accessibility menu icon */
 .qpatcher-hide-a11y #panel .accessibility,
 .qpatcher-hide-a11y #panel [accessible-name*="Accessibility"],
+.qpatcher-hide-a11y #panel [accessible-name*="Accessibility"],
+.qpatcher-hide-a11y #panel [accessible-name*="Universal Access"],
 .qpatcher-hide-a11y #panel [accessible-name*="Специальные возможности"] {
     display: none !important;
     width: 0 !important;
@@ -58,10 +60,10 @@
 
 
 /* =================================================== */
-/* 2. ДОК (Dash и Dash to Dock)                        */
+/* 2. DOCK (Dash & Dash to Dock)                        */
 /* =================================================== */
 
-/* Полное скрытие серых подложек-плиток GNOME 47 под иконками дока */
+/* Hide grey tile backgrounds under dock icons */
 #dashtodockContainer .overview-icon,
 #dashtodockContainer .overview-tile .overview-icon,
 #dashtodockContainer .show-apps .overview-icon,
@@ -91,7 +93,7 @@
     margin-bottom: 0px !important;
 }
 
-/* Скрытие счетчиков уведомлений на иконках дока */
+/* Hide notification counters on dock icons */
 .qpatcher-hide-dock-notification-badge .notification-badge,
 .qpatcher-hide-dock-notification-badge #dashtodockContainer .notification-badge,
 .qpatcher-hide-dock-notification-badge .app-well-app .notification-badge,
@@ -116,7 +118,7 @@
 }
 
 
-/* Аккуратный круглый бейдж уведомлений на иконках */
+/* Circular notification badge geometry */
 .notification-badge {
     color: #ffffff !important;
     background-color: #e01b24 !important;
@@ -125,7 +127,7 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45) !important;
 }
 
-/* Подсветка бейджа уведомлений акцентным цветом */
+/* Accent colored notification badges */
 .qpatcher-badge-accent .notification-badge,
 .qpatcher-badge-accent #dashtodockContainer .notification-badge,
 .qpatcher-badge-accent .app-well-app .notification-badge,
@@ -135,7 +137,7 @@
     color: #ffffff !important;
 }
 
-/* Скрытие разделителя во всех положениях */
+/* Hide dock separator */
 .qpatcher-no-dock-separator .dash-separator,
 .qpatcher-no-dock-separator #dash .dash-separator,
 .qpatcher-no-dock-separator #dashtodockContainer .dash-separator,
@@ -154,7 +156,7 @@
     background: transparent !important;
 }
 
-/* Скрытие точек активности */
+/* Hide running indicator dots */
 .qpatcher-no-dock-running-dots .app-grid-running-dot,
 .qpatcher-no-dock-running-dots .app-well-app-running-dot,
 .qpatcher-no-dock-running-dots #dash .app-grid-running-dot,
@@ -173,7 +175,7 @@
     border: none !important;
 }
 
-/* Скрытие всплывающих подсказок (Tooltips) в доке */
+/* Hide dock tooltips */
 .qpatcher-no-dock-tooltips .dash-label,
 .qpatcher-no-dock-tooltips #dashtodockContainer .dash-label,
 .qpatcher-no-dock-tooltips .dash-item-container .dash-label,
@@ -189,7 +191,7 @@
     padding: 0 !important;
 }
 
-/* Скрытие кнопки всех приложений */
+/* Hide Show Applications button */
 .qpatcher-no-dock-show-apps #dash .show-apps,
 .qpatcher-no-dock-show-apps #dashtodockContainer .show-apps,
 .qpatcher-no-dock-show-apps .show-apps {
@@ -202,7 +204,7 @@
 
 
 /* =================================================== */
-/* 3. ОБЗОР (OVERVIEW)                                 */
+/* 3. OVERVIEW                                         */
 /* =================================================== */
 
 
@@ -222,7 +224,7 @@
     height: 0 !important;
 }
 
-/* Скрытие заголовка окна БЕЗ черного прямоугольника */
+/* Hide window title without black rectangle */
 .qpatcher-no-window-title .window-caption {
     display: none !important;
     visibility: hidden !important;
@@ -257,7 +259,7 @@
 
 
 /* =================================================== */
-/* 4. УВЕДОМЛЕНИЯ (NOTIFICATIONS)                      */
+/* 4. NOTIFICATIONS                                     */
 /* =================================================== */
 
 .qpatcher-no-notification-close .message-close-button,
@@ -286,10 +288,10 @@
 
 
 /* =================================================== */
-/* 5. ШТОРКА (DATEMENU)                                */
+/* 5. DATEMENU / NOTIFICATION CENTER                    */
 /* =================================================== */
 
-/* Полное скрытие разделителя, устранение асимметрии и центрирование message-list при скрытом календаре */
+/* Hide separator, remove 22px asymmetry and center message-list when calendar is hidden */
 .qpatcher-hide-calendar-column .message-list,
 .qpatcher-hide-calendar-column .message-list:ltr,
 .qpatcher-hide-calendar-column .message-list:rtl,
@@ -309,7 +311,7 @@
     width: 26em !important;
 }
 
-/* Устраняем 12px асимметрию message-view на правой стороне */
+/* Remove 12px right asymmetry in message-view */
 .qpatcher-hide-calendar-column .message-view,
 .qpatcher-hide-calendar-column .message-view:ltr,
 .qpatcher-hide-calendar-column .message-view:rtl,
@@ -329,7 +331,7 @@
     margin-bottom: 12px !important;
 }
 
-/* Полное скрытие правой колонки */
+/* Completely hide right column */
 .qpatcher-hide-calendar-column .datemenu-calendar-column,
 .qpatcher-hide-calendar .datemenu-calendar-column {
     display: none !important;
@@ -341,14 +343,14 @@
     border-left: none !important;
 }
 
-/* Симметричные отступы внутри всей шторки calendarArea */
+/* Symmetrical padding inside calendarArea */
 .qpatcher-hide-calendar-column #calendarArea,
 .qpatcher-hide-calendar #calendarArea {
     padding: 10px 14px !important;
     margin: 0 !important;
 }
 
-/* Центрирование кнопки "Очистить" */
+/* Center 'Clear All' button */
 .qpatcher-hide-calendar-column .message-list-controls,
 .qpatcher-hide-calendar .message-list-controls {
     padding: 8px 0 0 0 !important;
@@ -362,13 +364,13 @@
     margin: 0 auto !important;
 }
 
-/* Простое скрытие календаря */
+/* Simple calendar hiding */
 .qpatcher-hide-calendar .calendar,
 .qpatcher-hide-calendar .datemenu-calendar-column .calendar {
     display: none !important;
 }
 
-/* Компактный режим для пустых уведомлений */
+/* Compact mode for empty notifications */
 .qpatcher-compact-empty-notifications .message-list-placeholder > StLabel,
 .qpatcher-compact-empty-notifications .message-list-placeholder label {
     display: none !important;
@@ -392,7 +394,7 @@
 
 
 /* =================================================== */
-/* 6. ВСЕ МЕНЮ И СИСТЕМНЫЕ ДИАЛОГИ (THEME COLOR)       */
+/* 6. ALL MENUS & SYSTEM DIALOGS (THEME COLOR)         */
 /* =================================================== */
 
 .app-menu,
@@ -448,7 +450,7 @@
 }
 
 /* ========================================== */
-/* 8. СКРИНШОТЫ (SCREENSHOTS)                 */
+/* 8. SCREENSHOTS                                 */
 /* ========================================== */
 .qpatcher-screenshot-hide-panel .screenshot-ui-panel,
 .qpatcher-screenshot-hide-panel .screenshot-ui-close-button {
@@ -468,7 +470,7 @@
 }
 
 /* ========================================== */
-/* 9. БЫСТРЫЕ НАСТРОЙКИ (QUICK SETTINGS)     */
+/* 9. QUICK SETTINGS                              */
 /* ========================================== */
 .quick-settings-system-item .power-item,
 .quick-settings-system-item .quick-toggle.power-item {
@@ -489,10 +491,10 @@
 }
 
 /* ========================================== */
-/* 10. ШТОРКА И КАЛЕНДАРЬ (DATEMENU & CALENDAR) */
+/* 10. DATEMENU & CALENDAR                        */
 /* ========================================== */
 
-/* Убираем фоновые кружки/подложки с цифр календаря и дней недели */
+/* Clean background styling from calendar day numbers and weekdays */
 #calendarArea .calendar .calendar-day,
 #calendarArea .calendar .calendar-day-base,
 #calendarArea .calendar .calendar-day-heading,
@@ -511,7 +513,7 @@
     box-shadow: none !important;
 }
 
-/* Название месяца ("Октябрь 2026") - прозрачный заголовок без кнопки-подложки */
+/* Month title - transparent header without button background */
 #calendarArea .calendar .calendar-month-header .calendar-month-label,
 .datemenu-calendar-column .calendar .calendar-month-header .calendar-month-label,
 .calendar .calendar-month-header .calendar-month-label {
@@ -521,7 +523,7 @@
     box-shadow: none !important;
 }
 
-/* Кнопки переключения месяца (< и >) - плоские прозрачные, только ховер */
+/* Month switch buttons (< and >) - flat transparent */
 #calendarArea .calendar .calendar-month-header .pager-button,
 .datemenu-calendar-column .calendar .calendar-month-header .pager-button,
 .calendar .calendar-month-header .pager-button {
@@ -532,7 +534,7 @@
     border-radius: 999px !important;
 }
 
-/* Кнопка текущей даты вверху ("Понедельник, 26 октября") - прозрачный заголовок */
+/* Current date header - transparent title */
 #calendarArea .datemenu-today-button,
 .datemenu-calendar-column .datemenu-today-button,
 .datemenu-today-button {
@@ -542,7 +544,7 @@
     box-shadow: none !important;
 }
 
-/* Прозрачный фон для группы блокировки чтобы обои не перекрывались серым цветом #222226 */
+/* Transparent background for unlock group to preserve wallpaper */
 #lockDialogGroup {
     background-color: transparent !important;
 }

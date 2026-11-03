@@ -12,6 +12,10 @@
 
 <br/>
 
+<img src="screenshots/01_topbar.png" alt="QPatcher Settings Preview" width="850" />
+
+<br/>
+
 </div>
 
 ---
@@ -87,6 +91,36 @@
 - **Persistence Across Reboots**: Keeps history safely on disk by default, with an optional toggle to clear unpinned items on system boot.
 - **Bilingual Emoji Search and Full-Width Grid**: Search emojis in Russian and English with prioritized digit/number emojis and a homogeneous 12-column grid with zero dead zones.
 - **Universal Ctrl + A**: Supports full Select All in search inputs across both English and Russian keyboard layouts (`<Control>a` and `<Control>Cyrillic_ef`).
+
+---
+
+### 📸 Interface Preview
+
+<details open>
+<summary><b>Expand Settings UI Gallery</b></summary>
+<br/>
+
+| Top Bar Settings | Dock & Dash Settings |
+|:---:|:---:|
+| <img src="screenshots/01_topbar.png" width="460" alt="Top Bar" /> | <img src="screenshots/02_dock.png" width="460" alt="Dock" /> |
+
+| Overview & Windows | Notifications & OSD |
+|:---:|:---:|
+| <img src="screenshots/03_overview.png" width="460" alt="Overview & Windows" /> | <img src="screenshots/04_notifications.png" width="460" alt="Notifications & OSD" /> |
+
+| Calendar & Clock | Quick Settings |
+|:---:|:---:|
+| <img src="screenshots/05_datemenu.png" width="460" alt="Calendar & Clock" /> | <img src="screenshots/06_quicksettings.png" width="460" alt="Quick Settings" /> |
+
+| Screenshots Interception | Clipboard & Emoji Manager |
+|:---:|:---:|
+| <img src="screenshots/07_screenshots.png" width="460" alt="Screenshots" /> | <img src="screenshots/08_clipboard.png" width="460" alt="Clipboard & Emoji" /> |
+
+| Unified Appearance & System |
+|:---:|
+| <img src="screenshots/09_appearance.png" width="600" alt="Appearance & System" /> |
+
+</details>
 
 ---
 

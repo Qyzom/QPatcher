@@ -36,8 +36,8 @@ function formatTime(timestampSec) {
     if (!timestampSec) return '';
     const now = Math.floor(Date.now() / 1000);
     const diff = Math.max(0, now - timestampSec);
-    if (diff < 60) return 'Только что';
-    if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`;
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
     const d = new Date(timestampSec * 1000);
     const today = new Date();
     if (d.toDateString() === today.toDateString()) {
@@ -475,16 +475,16 @@ export class EmojiManager {
 
     getCategoryList() {
         return [
-            { id: 'recent', icon: '🕒', label: 'Недавние' },
-            { id: 'smileys', icon: '😃', label: 'Смайлы' },
-            { id: 'people', icon: '👋', label: 'Люди' },
-            { id: 'animals', icon: '🐶', label: 'Животные' },
-            { id: 'food', icon: '🍔', label: 'Еда' },
-            { id: 'travel', icon: '✈️', label: 'Места' },
-            { id: 'activities', icon: '⚽', label: 'Активности' },
-            { id: 'objects', icon: '💡', label: 'Предметы' },
-            { id: 'symbols', icon: '🔣', label: 'Символы и цифры' },
-            { id: 'flags', icon: '🚩', label: 'Флаги' },
+            { id: 'recent', icon: '🕒', label: 'Recent' },
+            { id: 'smileys', icon: '😃', label: 'Smileys' },
+            { id: 'people', icon: '👋', label: 'People' },
+            { id: 'animals', icon: '🐶', label: 'Animals' },
+            { id: 'food', icon: '🍔', label: 'Food' },
+            { id: 'travel', icon: '✈️', label: 'Places' },
+            { id: 'activities', icon: '⚽', label: 'Activities' },
+            { id: 'objects', icon: '💡', label: 'Objects' },
+            { id: 'symbols', icon: '🔣', label: 'Symbols' },
+            { id: 'flags', icon: '🚩', label: 'Flags' },
         ];
     }
 
@@ -577,7 +577,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             });
             this.menu.box.add_child(this._mainBox);
 
-            // 1. Segmented Tab Bar at the top: [ Буфер обмена ] [ Эмодзи ]
+            // 1. Segmented Tab Bar at the top: [ Clipboard ] [ Emoji ]
             this._tabsBar = new St.BoxLayout({
                 style_class: 'qpatcher-tabs-bar',
                 orientation: Clutter.Orientation.HORIZONTAL,
@@ -585,13 +585,13 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             });
 
             this._btnTabClipboard = new St.Button({
-                label: 'Буфер',
+                label: 'Clipboard',
                 style_class: 'qpatcher-tab-button active',
                 x_expand: true,
                 can_focus: true,
             });
             this._btnTabEmoji = new St.Button({
-                label: 'Эмодзи',
+                label: 'Emoji',
                 style_class: 'qpatcher-tab-button',
                 x_expand: true,
                 can_focus: true,
@@ -609,7 +609,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 style_class: 'qpatcher-search-entry',
                 can_focus: true,
                 x_expand: true,
-                hint_text: 'Поиск в истории...',
+                hint_text: 'Search history...',
             });
 
             const searchIcon = new St.Icon({
@@ -691,7 +691,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 y_align: Clutter.ActorAlign.CENTER,
             });
             const clearBtn = new St.Button({
-                label: 'Очистить всё',
+                label: 'Clear All',
                 style_class: 'qpatcher-clear-all-btn',
             });
             clearBtn.connect('clicked', () => {
@@ -773,7 +773,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
                 x_expand: true,
             });
             this._emojiStatusLabel = new St.Label({
-                text: 'Нажмите на эмодзи для вставки',
+                text: 'Click emoji to copy/paste',
                 style_class: 'qpatcher-footer-label',
                 x_expand: true,
                 y_align: Clutter.ActorAlign.CENTER,
@@ -811,14 +811,14 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             if (tabName === 'clipboard') {
                 this._btnTabClipboard.add_style_class_name('active');
                 this._btnTabEmoji.remove_style_class_name('active');
-                this._searchEntry.set_hint_text('Поиск в истории...');
+                this._searchEntry.set_hint_text('Search history...');
                 this._clipboardView.show();
                 this._emojiView.hide();
                 this._refreshClipboardList();
             } else {
                 this._btnTabEmoji.add_style_class_name('active');
                 this._btnTabClipboard.remove_style_class_name('active');
-                this._searchEntry.set_hint_text('Поиск эмодзи (на русском или по символу)...');
+                this._searchEntry.set_hint_text('Search emoji...');
                 this._clipboardView.hide();
                 this._emojiView.show();
                 this._updateCategoryButtons();
@@ -855,7 +855,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
 
             if (emojis.length === 0) {
                 const emptyLabel = new St.Label({
-                    text: query ? 'Эмодзи не найдены' : 'Список пуст',
+                    text: query ? 'No emojis found' : 'Emoji list is empty',
                     style_class: 'qpatcher-empty-label',
                     x_align: Clutter.ActorAlign.CENTER,
                     y_align: Clutter.ActorAlign.CENTER,
@@ -936,11 +936,11 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             const allItems = [...pinned, ...history].filter(filterFn);
             const totalCount = pinned.length + history.length;
             const maxLimit = this._clipboardManager.getLimit();
-            this._clipboardCountLabel.set_text(`Записей: ${totalCount} (лимит: ${maxLimit})`);
+            this._clipboardCountLabel.set_text(`Items: ${totalCount} (limit: ${maxLimit})`);
 
             if (allItems.length === 0) {
                 const emptyLabel = new St.Label({
-                    text: query ? 'Ничего не найдено' : 'История буфера обмена пуста',
+                    text: query ? 'Nothing found' : 'Clipboard history is empty',
                     style_class: 'qpatcher-empty-label',
                     x_align: Clutter.ActorAlign.CENTER,
                     y_align: Clutter.ActorAlign.CENTER,
@@ -1007,7 +1007,7 @@ export const QPatcherClipboardIndicator = GObject.registerClass(
             });
 
             const textLabel = new St.Label({
-                text: item.type === 'image' ? 'Изображение (PNG)' : (item.preview || item.text || ''),
+                text: item.type === 'image' ? 'Image (PNG)' : (item.preview || item.text || ''),
                 style_class: 'qpatcher-item-text',
                 x_expand: true,
             });

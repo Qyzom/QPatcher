@@ -91,7 +91,7 @@ export default class QPatcherExtension extends Extension {
             },
         };
 
-        // Внешние системные интерфейсы
+        // External system interfaces
         this._interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
         this._a11ySettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.a11y' });
         this._shellSettings = new Gio.Settings({ schema_id: 'org.gnome.shell' });
@@ -132,7 +132,7 @@ export default class QPatcherExtension extends Extension {
         };
 
         // ==========================================
-        // 1. ТОПБАР (TOPBAR)
+        // 1. TOP BAR
         // ==========================================
 
         watchKey(this._settings, 'topbar-monitor', () => {
@@ -168,7 +168,7 @@ export default class QPatcherExtension extends Extension {
             } catch (e) {}
         });
 
-        // Цвет фона и прозрачность панели
+        // Panel background color and opacity
         const updatePanelColor = () => {
             const style = getStr('topbar-style', 'default');
             const opacity = getInt('topbar-opacity', 100) / 100.0;
@@ -206,7 +206,7 @@ export default class QPatcherExtension extends Extension {
             this._updateDynamicThemeStylesheet();
         });
 
-        // Видимость элементов панели
+        // Panel elements visibility
         watchKey(this._settings, 'panel-visibility', () => {
             if (Main.panel) Main.panel.visible = getBool('panel-visibility', true);
         });
@@ -245,7 +245,7 @@ export default class QPatcherExtension extends Extension {
 
 
         // ==========================================
-        // 2. ДОК (DASH & DOCK)
+        // 2. DASH & DOCK
         // ==========================================
 
         watchKey(this._settings, 'dock-separator-hide', () => {
@@ -350,7 +350,7 @@ export default class QPatcherExtension extends Extension {
 
 
         // ==========================================
-        // 3. ОБЗОР (OVERVIEW) & ОКНА
+        // 3. OVERVIEW & WINDOWS
         // ==========================================
 
         watchKey(this._settings, 'overview-style', () => {});
@@ -381,7 +381,7 @@ export default class QPatcherExtension extends Extension {
 
 
         // ==========================================
-        // 4. УВЕДОМЛЕНИЯ (NOTIFICATIONS)
+        // 4. NOTIFICATIONS
         // ==========================================
 
         watchKey(this._settings, 'notification-monitor', () => {
@@ -409,7 +409,7 @@ export default class QPatcherExtension extends Extension {
 
 
         // ==========================================
-        // 5. ШТОРКА (DATEMENU)
+        // 5. DATEMENU / CALENDAR
         // ==========================================
 
         const updateDateMenuColumns = () => {
@@ -427,7 +427,7 @@ export default class QPatcherExtension extends Extension {
             if (dm._clocksItem) dm._clocksItem.visible = !hideClocks;
             if (dm._eventsItem) dm._eventsItem.visible = !hideEvents;
 
-            // Если справа всё скрыто, скрываем колонку целиком и схлопываем окно
+            // If right column is completely hidden, collapse the column and window
             const hasAnyRightItem = (!hideCalendar) || (!hideWeather) || (!hideClocks) || (!hideEvents);
 
             const calendarCol = dm._calendar?.get_parent() || dm._calendarColumn;
@@ -475,7 +475,7 @@ export default class QPatcherExtension extends Extension {
 
 
         // ==========================================
-        // 6. БЫСТРЫЕ НАСТРОЙКИ (QUICK SETTINGS)
+        // 6. QUICK SETTINGS
         // ==========================================
 
         const updateQuickSettingsButtons = () => {
@@ -553,7 +553,7 @@ export default class QPatcherExtension extends Extension {
         watchKey(this._settings, 'qs-settings-hide', updateQuickSettingsButtons);
         watchKey(this._settings, 'qs-lock-hide', updateQuickSettingsButtons);
 
-        // Растягивание нечетной плитки на всю ширину
+        // Stretch odd tile across both columns
         watchKey(this._settings, 'quicksettings-full-width-toggle', () => {
             this._applyQuickSettingsFullWidth();
         });
@@ -578,7 +578,7 @@ export default class QPatcherExtension extends Extension {
         });
 
         // ==========================================
-        // 7. ПРОЧЕЕ (SYSTEM & ACCENT)
+        // 7. SYSTEM & ACCENT
         // ==========================================
 
         watchKey(this._settings, 'dark-mode', () => {
@@ -717,7 +717,7 @@ export default class QPatcherExtension extends Extension {
             this._signals.push({ obj: Main.sessionMode, id: sessModeId });
         }
 
-        // Первичная инициализация всех стилей и эффектов
+        // Initial startup of all styles and effects
         updatePanelColor();
         this._updatePanelMonitor();
         this._syncDashToDockSettings();
@@ -729,11 +729,11 @@ export default class QPatcherExtension extends Extension {
         this._applyQuickSettingsFullWidth();
         this._updateDynamicThemeStylesheet();
 
-        // Инициализация видимости строки поиска в обзоре
+        // Initialize search bar visibility in overview
         this._setupOverviewSearchHooks();
         this._updateOverviewSearchVisibility();
 
-        // Устанавливаем надежные хуки на прототипы и индикаторы
+        // Install robust hooks on prototypes and indicators
         this._setupKeyboardManagerHook();
         this._setupClassPrototypePatches();
         this._setupDockMagnification();
@@ -743,7 +743,7 @@ export default class QPatcherExtension extends Extension {
         this._setupScreenshotCustomizations();
         this._updateLockScreenDateMenu();
 
-        // Поэтапные проходы инициализации увеличения дока после перезагрузки
+        // Staged initialization passes for dock magnification after reload
         [400, 1200, 2500, 5000].forEach(delay => {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
                 this._setupDockMagnification();
@@ -751,14 +751,14 @@ export default class QPatcherExtension extends Extension {
             });
         });
 
-        // Инициализация менеджера буфера обмена и эмодзи
+        // Initialize clipboard manager and emoji picker
         try {
             this._clipboardHistoryManager = new ClipboardHistoryManager(this, this._settings);
             this._clipboardHistoryManager.start();
             this._emojiManager = new EmojiManager(this);
             this._clipboardIndicator = new QPatcherClipboardIndicator(this, this._clipboardHistoryManager, this._emojiManager);
 
-            // Нативный элемент в правой части топбара (как Vitals / AIO Clipboard)
+            // Native indicator in right top bar (like Vitals / AIO Clipboard)
             Main.panel.addToStatusArea('qpatcher-clipboard', this._clipboardIndicator, 1, 'right');
 
             const syncClipboardIndicatorVis = () => {
@@ -769,7 +769,7 @@ export default class QPatcherExtension extends Extension {
             syncClipboardIndicatorVis();
             watchKey(this._settings, 'clipboard-topbar-icon', syncClipboardIndicatorVis);
 
-            // Регистрация глобальных горячих клавиш
+            // Register global shortcuts
             Main.wm.addKeybinding(
                 'clipboard-shortcut',
                 this._settings,
@@ -794,7 +794,7 @@ export default class QPatcherExtension extends Extension {
                 }
             );
 
-            // Экспорт DBus метода для внешнего вызова из терминала / бинда / скрипта
+            // Export DBus method for external invocation from terminal / scripts
             const ifaceXml = `
             <node>
               <interface name="org.gnome.Shell.Extensions.QPatcher">
@@ -823,7 +823,7 @@ export default class QPatcherExtension extends Extension {
             console.error('[QPatcher] Failed to initialize Clipboard & Emoji manager:', e);
         }
 
-        // Автоматическая блокировка экрана при старте системы (если настроен автологин)
+        // Automatic lock screen on system boot (if autologin is enabled)
         if (this._getSettingBool('autologin-lock-on-boot', false)) {
             try {
                 const [, uptimeContent] = GLib.file_get_contents('/proc/uptime');
@@ -991,7 +991,7 @@ export default class QPatcherExtension extends Extension {
                     box-shadow: none !important;
                 }
 
-                /* Все выпадающие меню (смена языка, плагины Vitals/Tray, системные меню) */
+                /* All dropdown menus (language, Vitals/Tray plugins, system menus) */
                 .popup-menu-content,
                 .candidate-popup-content,
                 .app-menu .popup-menu-content,
@@ -1004,13 +1004,13 @@ export default class QPatcherExtension extends Extension {
                     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
                 }
 
-                /* Подменю внутри попапов */
+                /* Submenus inside popups */
                 .popup-sub-menu {
                     background-color: ${cardBg} !important;
                     border-radius: 12px !important;
                 }
 
-                /* Элементы меню (пункты, переключатели, кнопки в меню) */
+                /* Menu items, switches, buttons in menus */
                 .popup-menu-item,
                 .popup-sub-menu .popup-menu-item,
                 .quick-toggle-menu .popup-menu-item,
@@ -1636,7 +1636,7 @@ export default class QPatcherExtension extends Extension {
             d2d.set_boolean('custom-theme-shrink', true);
             d2d.set_string('transparency-mode', 'FIXED');
 
-            // Индикаторы активности запущенных приложений (одиночная полоска или точки)
+            // Running app indicators (single bar or dots)
             if (runningBar) {
                 d2d.set_string('running-indicator-style', 'SOLID');
                 d2d.set_boolean('custom-theme-customize-running-dots', true);
@@ -1662,16 +1662,16 @@ export default class QPatcherExtension extends Extension {
                 d2d.set_double('background-opacity', opacity);
             }
 
-            // Синхронизация монитора для дока
+            // Synchronize dock monitor
             const dockMonSetting = this._getSettingInt('dock-monitor', 0);
             if (dockMonSetting === 3) {
-                // Отображать на всех мониторах
+                // Display on all monitors
                 d2d.set_boolean('multi-monitor', true);
             } else {
                 d2d.set_boolean('multi-monitor', false);
                 let targetMonIndex;
                 if (dockMonSetting === 0) {
-                    // Следовать за верхней панелью
+                    // Follow top bar
                     targetMonIndex = this._getTargetTopbarMonitorIndex();
                 } else {
                     const rawIdx = dockMonSetting - 1;
@@ -1741,14 +1741,14 @@ export default class QPatcherExtension extends Extension {
         if (Main.overview?.dash) dashes.add(Main.overview.dash);
         if (Main.overview?._overview?._controls?._dash) dashes.add(Main.overview._overview._controls._dash);
 
-        // 1. Из DockManager
+        // 1. From DockManager
         if (this._dockManager?._allDocks) {
             for (const dock of this._dockManager._allDocks) {
                 if (dock?.dash) dashes.add(dock.dash);
             }
         }
 
-        // 2. Из Main.uiGroup и global.stage
+        // 2. From Main.uiGroup and global.stage
         const searchContainer = (parent) => {
             if (!parent?.get_children) return;
             for (const child of parent.get_children()) {
@@ -1857,7 +1857,7 @@ export default class QPatcherExtension extends Extension {
     _setupDashMagnification(dash) {
         if (!this._isValidActor(dash)) return;
         try {
-            // Отключаем обрезку по всей цепочке родителей
+            // Disable clipping across parent hierarchy
             let curr = dash;
             while (curr && curr !== global.stage && curr !== Main.uiGroup) {
                 if (curr.clip_to_allocation !== undefined) curr.clip_to_allocation = false;
@@ -1928,7 +1928,7 @@ export default class QPatcherExtension extends Extension {
             const grid = qs?.menu?._grid;
             if (!grid) return;
 
-            // Надежно держим хук на открытие меню и добавление дочерних плиток
+            // Robust hook on menu opening and child tiles
             if (qs.menu && !qs.menu._qpatcherOpenStateConnected) {
                 qs.menu._qpatcherOpenStateConnected = true;
                 qs.menu.connect('open-state-changed', (menu, isOpen) => {
@@ -2039,7 +2039,7 @@ export default class QPatcherExtension extends Extension {
                     panelBox.set_position(mon.x, mon.y);
                     changed = true;
                 }
-                // Всегда используем -1 для высоты, чтобы Clutter/St рассчитывал естественную высоту дочерних элементов
+                // Always use -1 for height so Clutter/St calculates natural child height
                 panelBox.set_size(mon.width, -1);
                 panelBox.translation_y = 0;
 
@@ -2076,7 +2076,7 @@ export default class QPatcherExtension extends Extension {
             const targetMonitor = this._getSettingInt('notification-monitor');
             const hAlign = this._getSettingString('notification-horizontal-alignment', 'center');
 
-            // 1. Позиционирование на мониторе
+            // 1. Position on monitor
             const maxMonIndex = Math.max(0, (Main.layoutManager?.monitors?.length ?? 1) - 1);
             const isPrimary = targetMonitor === 0;
             const monIndex = isPrimary
@@ -2093,7 +2093,7 @@ export default class QPatcherExtension extends Extension {
                 }
             }
 
-            // 2. Горизонтальное выравнивание
+            // 2. Horizontal alignment
             tray.x_expand = true;
             tray._bannerBin.x_expand = true;
             tray._bannerBin.margin_left = 0;
@@ -2146,7 +2146,7 @@ export default class QPatcherExtension extends Extension {
             Main.osdWindowManager.showAll = function(icon, label, level, maxLevel) {
                 const osdMode = self._getSettingInt('osd-monitor', 0);
 
-                // -1: На всех мониторах (поведение GNOME по умолчанию)
+                // -1: On all monitors (default GNOME behavior)
                 if (osdMode === -1) {
                     return self._origOsdShowAll.call(this, icon, label, level, maxLevel);
                 }
@@ -2382,7 +2382,7 @@ export default class QPatcherExtension extends Extension {
         try {
             if (!Main.layoutManager) return;
 
-            // 1. Привязка поиска монитора для panelBox (чтобы нативное отслеживание GNOME знало точный монитор)
+            // 1. Bind monitor lookup for panelBox
             if (!this._origFindIndexForActor && Main.layoutManager.findIndexForActor) {
                 this._origFindIndexForActor = Main.layoutManager.findIndexForActor;
                 const self = this;
@@ -2394,7 +2394,7 @@ export default class QPatcherExtension extends Extension {
                 };
             }
 
-            // 2. Позиционирование panelBox на выбранный монитор при пересчете геометрии
+            // 2. Position panelBox on selected monitor during geometry recompute
             if (!this._origUpdateBoxes && Main.layoutManager._updateBoxes) {
                 this._origUpdateBoxes = Main.layoutManager._updateBoxes;
                 const self = this;
@@ -2934,7 +2934,7 @@ export default class QPatcherExtension extends Extension {
         }
         this._emojiManager = null;
 
-        // Восстанавливаем оригинальные методы клавиатуры
+        // Restore original keyboard methods
         this._restoreKeyboardManagerHook();
         this._sessionModeHookConnected = false;
         this._screenShieldHookConnected = false;
@@ -3069,7 +3069,7 @@ export default class QPatcherExtension extends Extension {
     }
 
     // ==========================================
-    // СКРИНШОТЫ (SCREENSHOTS CUSTOMIZATION)
+    // SCREENSHOTS CUSTOMIZATION
     // ==========================================
     _setupScreenshotCustomizations() {
         if (!Main.screenshotUI) return;
@@ -3255,7 +3255,7 @@ export default class QPatcherExtension extends Extension {
             if (Main.screenshotUI.visible) {
                 updatePanelVisibility();
 
-                // Сброс области выделения по умолчанию (начинаем с чистого экрана)
+                // Reset default selection area (start with clean screen)
                 if (this._getSettingBool('screenshot-clear-selection', true)) {
                     const areaSelector = Main.screenshotUI._areaSelector;
                     if (areaSelector) {
@@ -3341,9 +3341,9 @@ export default class QPatcherExtension extends Extension {
         if (geometry && Array.isArray(geometry)) {
             let [gx, gy, gw, gh] = geometry;
 
-            // Если область не была явно выделена (0x0 или 1x1 при сбросе) или невалидна
+            // If area was not explicitly selected (0x0 or 1x1 on reset) or invalid
             if ((gw <= 2 && gh <= 2) || gw <= 0 || gh <= 0) {
-                // Полноэкранный захват обоих мониторов (строго точные размеры текстуры, НЕ -1, -1)
+                // Fullscreen capture of all monitors (exact texture size, not -1, -1)
                 x = 0;
                 y = 0;
                 w = texWidth;
@@ -3354,15 +3354,15 @@ export default class QPatcherExtension extends Extension {
                 gw = Math.round(gw);
                 gh = Math.round(gh);
 
-                // Ограничиваем начальные координаты в пределах текстуры
+                // Clamp origin coordinates within texture bounds
                 x = Math.max(0, Math.min(gx, texWidth - 1));
                 y = Math.max(0, Math.min(gy, texHeight - 1));
 
-                // Если начальная точка была за левым/верхним краем, компенсируем ширину/высоту
+                // If origin was outside left/top boundary, compensate width/height
                 if (gx < 0) gw += gx;
                 if (gy < 0) gh += gy;
 
-                // Строго ограничиваем ширину и высоту, чтобы x + w <= texWidth и y + h <= texHeight
+                // Strictly clamp width and height so x + w <= texWidth and y + h <= texHeight
                 w = Math.max(1, Math.min(gw, texWidth - x));
                 h = Math.max(1, Math.min(gh, texHeight - y));
             }
@@ -3402,7 +3402,7 @@ export default class QPatcherExtension extends Extension {
             if (saveLocation === 'pictures') {
                 dir = Gio.File.new_for_path(picturesDir);
             } else {
-                let screenshotsSubdir = 'Снимки экрана';
+                let screenshotsSubdir = 'Screenshots';
                 const testDir = Gio.File.new_for_path(GLib.build_filenamev([picturesDir, screenshotsSubdir]));
                 if (!testDir.query_exists(null)) {
                     const testEn = Gio.File.new_for_path(GLib.build_filenamev([picturesDir, 'Screenshots']));
@@ -3430,7 +3430,7 @@ export default class QPatcherExtension extends Extension {
                 baseName = time.format('%Y-%m-%d_%H.%M.%S');
             } else {
                 const timestamp = time.format('%Y-%m-%d %H-%M-%S');
-                baseName = `Снимок экрана от ${timestamp}`;
+                baseName = `Screenshot from ${timestamp}`;
             }
 
             file = Gio.File.new_for_path(GLib.build_filenamev([
@@ -3499,7 +3499,7 @@ export default class QPatcherExtension extends Extension {
 
         if (!this._screenshotSource) {
             this._screenshotSource = new MessageTray.Source({
-                title: 'Снимок экрана',
+                title: 'Screenshot',
                 iconName: 'screenshooter-symbolic',
             });
             this._screenshotSource.connect('destroy', () => {
@@ -3508,10 +3508,10 @@ export default class QPatcherExtension extends Extension {
             Main.messageTray.add(this._screenshotSource);
         }
 
-        const title = clipboardOnly ? 'Снимок скопирован' : 'Снимок сохранён';
+        const title = clipboardOnly ? 'Screenshot copied' : 'Screenshot saved';
         const body = clipboardOnly
-            ? 'Изображение скопировано в буфер обмена'
-            : 'Изображение сохранено и скопировано в буфер обмена';
+            ? 'Image copied to clipboard'
+            : 'Image saved and copied to clipboard';
 
         const notification = new MessageTray.Notification({
             source: this._screenshotSource,
@@ -3526,7 +3526,7 @@ export default class QPatcherExtension extends Extension {
         } catch (e) {}
 
         if (file && !clipboardOnly) {
-            notification.addAction('Показать в файлах', () => {
+            notification.addAction('Show in Files', () => {
                 try {
                     const app = Gio.app_info_get_default_for_type('inode/directory', false);
                     if (app) app.launch([file], null);
