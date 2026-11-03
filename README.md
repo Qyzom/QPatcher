@@ -9,6 +9,7 @@
 [![GNOME Shell](https://img.shields.io/badge/GNOME_Shell-45_--_51-orange.svg)](https://www.gnome.org/)
 [![JavaScript](https://img.shields.io/badge/Runtime-GJS_/_ESM-yellow.svg)](https://gjs.guide/)
 [![Platform](https://img.shields.io/badge/Platform-Linux_(Wayland_/_X11)-brightgreen.svg)]()
+[![Release](https://img.shields.io/github/v/release/Qyzom/QPatcher?color=teal)](https://github.com/Qyzom/QPatcher/releases)
 
 <br/>
 
@@ -94,7 +95,7 @@
 
 ---
 
-### 📸 Interface Preview
+### Interface Preview
 
 <details open>
 <summary><b>Expand Settings UI Gallery</b></summary>
