@@ -25,6 +25,9 @@
 
 **QPatcher** is a comprehensive, standalone extension suite for GNOME Shell designed to refine, fix, and elevate your desktop experience. Instead of installing a dozen individual, overlapping, and conflicting extensions for panels, docks, blur, notifications, and screenshot behaviors, QPatcher unifies everything into a single, cohesive, and finely-tuned package.
 
+> [!NOTE]
+> **Project Scope & Personal Use**: QPatcher is designed, authored, and continually updated **strictly for personal daily use**, tailored specifically to my personal workflow, multi-monitor configuration, and hardware peripherals. Because of this, the extension contains several hyper-specialized features and hardware-level hooks (such as custom HID battery telemetry for specific wireless gaming mice and headsets). It is shared publicly under the MIT license in case other Linux and GNOME enthusiasts find these focused patches and utilities useful for their own configurations.
+
 ---
 
 ### Key Features and Highlights
@@ -93,6 +96,15 @@
 - **Bilingual Emoji Search and Full-Width Grid**: Search emojis in Russian and English with prioritized digit/number emojis and a homogeneous 12-column grid with zero dead zones.
 - **Universal Ctrl + A**: Supports full Select All in search inputs across both English and Russian keyboard layouts (`<Control>a` and `<Control>Cyrillic_ef`).
 
+#### 10. Peripheral Battery Monitor (Top Bar)
+- **Direct USB/HID Battery Telemetry**: Query wireless battery levels directly without heavy proprietary Electron clients or background daemon memory overhead.
+- **VXE Dragonfly Series**: Real-time battery charge percentage (0–100%), charging state indicator (`⚡`), and battery voltage (mV) via CompX 2.4G wireless dongles.
+- **MCHOSE V9 Turbo Support**: Detects and monitors C-Media USB Audio wireless headset status.
+- **Top Bar Indicator**: Clean battery icon with dynamic state and optional numeric percentage label directly on the panel.
+- **Dropdown Summary**: Popup menu displaying device cards, charging states, live battery badges, and manual refresh button.
+- **Web Driver Integration**: Quick launch button to configure DPI, polling rate, debounce, and macros on [ATK Web Hub](https://hub.atk.pro).
+- **Bundled udev Rules**: Includes `udev/99-qpatcher-peripherals.rules` to enable unprivileged non-root HID queries.
+
 ---
 
 ### Interface Preview
@@ -144,13 +156,20 @@ cp schemas/*.xml ~/.local/share/glib-2.0/schemas/
 glib-compile-schemas ~/.local/share/glib-2.0/schemas/
 ```
 
-3. Enable the extension:
+3. (Optional, for Peripheral Battery Monitoring) Install udev rules for VXE & MCHOSE devices:
+
+```bash
+sudo cp udev/99-qpatcher-peripherals.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+4. Enable the extension:
 
 ```bash
 gnome-extensions enable qpatcher@qybic
 ```
 
-4. Reload GNOME Shell:
+5. Reload GNOME Shell:
    - On **Wayland**: Log out and log back in.
    - On **X11**: Press `Alt + F2`, type `r`, and press `Enter`.
 

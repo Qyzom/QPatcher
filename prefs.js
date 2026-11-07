@@ -270,6 +270,15 @@ export default class QPatcherPreferences extends ExtensionPreferences {
         addSwitch(topbarVisibilityGroup, 'Accessibility Menu', null, 'accessibility-menu');
         addSwitch(topbarVisibilityGroup, 'Quick Settings Menu', null, 'quicksettings-button');
 
+        const peripheralBatteryGroup = new Adw.PreferencesGroup({
+            title: _('Peripheral Battery Monitor'),
+            description: _('Monitor battery levels for VXE Dragonfly mice and MCHOSE headsets'),
+        });
+        pageTopbar.add(peripheralBatteryGroup);
+
+        addSwitch(peripheralBatteryGroup, 'Peripheral Battery Indicator', 'Display battery icon and popup in the top bar', 'battery-indicator-enabled');
+        addSwitch(peripheralBatteryGroup, 'Show Percentage on Panel', 'Show numeric percentage text next to top bar icon', 'battery-show-percentage-in-panel');
+
 
         // ==========================================
         // 2. TAB: DASH & DOCK

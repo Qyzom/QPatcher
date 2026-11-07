@@ -72,6 +72,14 @@ QPatcher is engineered as a **self-contained, unified GNOME Shell customization 
 - **Direct Password Prompt:** Bypasses the lock screen curtain to immediately focus the password entry.
 - **Single-User Auto-Select:** Automatically focuses the single system user on the login screen.
 
+### 2.9. Peripheral Battery Monitor Subsystem
+- **Direct USB/HID Telemetry:** Asynchronously queries hardware endpoints using `/dev/hidraw` without Electron or heavyweight background daemons.
+- **CompX Protocol Support:** Supports VXE Dragonfly series (R1, R1+, Pro, SE) wireless mice (`VID: 0x373b`, `0x3554`) for real-time percentage, charging state, and mV voltage.
+- **C-Media Audio Support:** Detects MCHOSE V9 Turbo wireless gaming headset (`3837:600d`).
+- **Dynamic Top Bar Indicator:** `PanelMenu.Button` featuring dynamic battery icons, optional panel percentage text, device cards, and a direct link to ATK Web Hub (`https://hub.atk.pro`).
+- **Zero-Block Execution:** Background queries run via non-blocking `Gio.Subprocess` asynchronously every 30 seconds.
+- **Personal Use Scope:** Authored primarily for personal daily use and hardware configurations, maintained open-source for fellow enthusiasts.
+
 ---
 
 ## 3. Communication & Lifecycle Architecture
@@ -153,6 +161,10 @@ QPatcher/
 ├── sounds/                             # Shutter and click audio assets
 │   ├── click.ogg
 │   └── shutter.ogg
+├── udev/                               # Hardware udev rules
+│   └── 99-qpatcher-peripherals.rules   # Non-root HID rules for wireless peripherals
+├── battery.js                          # Peripheral battery indicator (PanelMenu.Button)
+├── battery_reader.py                   # Async HID battery reader for VXE & MCHOSE devices
 ├── clipboard.js                        # Clipboard history and emoji picker engine
 ├── emoji_data.json                     # Bilingual emoji metadata database
 ├── extension.js                        # Main GNOME Shell extension lifecycle & runtime hooks

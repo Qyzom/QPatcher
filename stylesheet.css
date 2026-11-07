@@ -833,6 +833,14 @@
     visibility: hidden !important;
 }
 
+/* Peripheral Battery Panel Label */
+.qpatcher-battery-panel-label {
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: 4px;
+}
+
+
 
 
 

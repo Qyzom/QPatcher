@@ -534,5 +534,26 @@
       <description>When autologin is enabled, immediately lock the session on startup to show custom lockscreen</description>
     </key>
 
+    <!-- ========================================== -->
+    <!-- 10. PERIPHERAL BATTERY MONITOR              -->
+    <!-- ========================================== -->
+    <key name="battery-indicator-enabled" type="b">
+      <default>true</default>
+      <summary>Peripheral Battery Indicator</summary>
+      <description>Show wireless peripheral battery status in the top bar (VXE mice, MCHOSE headsets)</description>
+    </key>
+
+    <key name="battery-show-percentage-in-panel" type="b">
+      <default>false</default>
+      <summary>Show Battery Percentage in Panel</summary>
+      <description>Display numeric battery percentage alongside the top bar icon</description>
+    </key>
+
+    <key name="battery-poll-interval" type="i">
+      <default>30</default>
+      <summary>Battery Poll Interval (seconds)</summary>
+      <description>Interval in seconds between background battery level queries</description>
+    </key>
+
   </schema>
 </schemalist>

@@ -19,6 +19,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { DockManager } from './dock/docking.js';
 import { ClipboardHistoryManager, EmojiManager, QPatcherClipboardIndicator } from './clipboard.js';
+import { QPatcherBatteryIndicator } from './battery.js';
 
 export default class QPatcherExtension extends Extension {
     _getUiGroup() {
@@ -821,6 +822,22 @@ export default class QPatcherExtension extends Extension {
             );
         } catch (e) {
             console.error('[QPatcher] Failed to initialize Clipboard & Emoji manager:', e);
+        }
+
+        // Initialize peripheral battery indicator (VXE Dragonfly, MCHOSE Headset)
+        try {
+            this._batteryIndicator = new QPatcherBatteryIndicator(this, this._settings);
+            Main.panel.addToStatusArea('qpatcher-battery', this._batteryIndicator, 2, 'right');
+
+            const syncBatteryIndicatorVis = () => {
+                if (this._batteryIndicator) {
+                    this._batteryIndicator.visible = this._getSettingBool('battery-indicator-enabled', true);
+                }
+            };
+            syncBatteryIndicatorVis();
+            watchKey(this._settings, 'battery-indicator-enabled', syncBatteryIndicatorVis);
+        } catch (e) {
+            console.error('[QPatcher] Failed to initialize peripheral battery indicator:', e);
         }
 
         // Automatic lock screen on system boot (if autologin is enabled)
@@ -2969,6 +2986,11 @@ export default class QPatcherExtension extends Extension {
         if (this._clipboardIndicator) {
             this._clipboardIndicator.destroy();
             this._clipboardIndicator = null;
+        }
+
+        if (this._batteryIndicator) {
+            this._batteryIndicator.destroy();
+            this._batteryIndicator = null;
         }
 
         if (this._clipboardHistoryManager) {
