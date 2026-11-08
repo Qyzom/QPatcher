@@ -120,48 +120,89 @@ def query_vxe_mouse(node, cached_data=None):
 
     return None
 
-def find_v9_headset(v9_hidraw_nodes):
-    # 1. Check if connected via 2.4G hidraw
-    for node in v9_hidraw_nodes:
-        if os.path.exists(node):
-            return {
-                "name": "MCHOSE V9 Turbo",
-                "connected": True,
-                "battery": None,
-                "charging": False,
-                "state": "Connected (2.4G)",
-                "node": node
-            }
+def query_v9_headset(node, cached_data=None):
+    try:
+        fd = os.open(node, os.O_RDWR | os.O_NONBLOCK)
+    except Exception as e:
+        return {
+            "name": "MCHOSE V9 Turbo",
+            "connected": False,
+            "error": str(e),
+            "node": node
+        }
 
-    # 2. Check USB devices in sysfs (handles wired USB-C mode 10d6:10d6 or 3837:600d)
+    # MCHOSE V9 protocol: 0x55 0x65 0x01
+    req = bytearray(64)
+    req[0] = 0x55
+    req[1] = 0x65
+    req[2] = 0x01
+
+    try:
+        os.write(fd, bytes(req))
+        start_time = time.time()
+        while time.time() - start_time < 0.8:
+            r, _, _ = select.select([fd], [], [], 0.05)
+            if not r:
+                continue
+            resp = os.read(fd, 64)
+            if len(resp) >= 4 and resp[0] == 0x55 and resp[1] == 0x65:
+                battery = int(resp[2])
+                charging = bool(resp[3] == 1)
+                return {
+                    "name": "MCHOSE V9 Turbo",
+                    "connected": True,
+                    "battery": battery,
+                    "charging": charging,
+                    "state": "Charging" if charging else "2.4G Wireless",
+                    "node": node,
+                    "updated_at": time.time()
+                }
+    except Exception:
+        pass
+    finally:
+        os.close(fd)
+
+    if cached_data and cached_data.get("battery") is not None:
+        cached_data["connected"] = True
+        return cached_data
+
+    return None
+
+def find_v9_headset(v9_hidraw_nodes, cached_headset=None):
+    # 1. First try active 2.4G dongle HID query
+    for node in v9_hidraw_nodes:
+        res = query_v9_headset(node, cached_headset)
+        if res and res.get("connected") and res.get("battery") is not None:
+            return res
+
+    # 2. Check if wired USB cable is connected (10d6:10d6)
+    wired_path = None
     for p in sorted(glob.glob('/sys/bus/usb/devices/*')):
         v_file = os.path.join(p, 'idVendor')
         p_file = os.path.join(p, 'idProduct')
         if os.path.exists(v_file) and os.path.exists(p_file):
             try:
                 with open(v_file) as vf, open(p_file) as pf:
-                    vid = vf.read().strip().lower()
-                    pid = pf.read().strip().lower()
-                    if vid == '10d6' and pid == '10d6':
-                        return {
-                            "name": "MCHOSE V9 Turbo",
-                            "connected": True,
-                            "battery": None,
-                            "charging": True,
-                            "state": "Wired / Charging",
-                            "node": p
-                        }
-                    elif vid == '3837' and pid == '600d':
-                        return {
-                            "name": "MCHOSE V9 Turbo",
-                            "connected": True,
-                            "battery": None,
-                            "charging": False,
-                            "state": "Connected (2.4G)",
-                            "node": p
-                        }
+                    if vf.read().strip().lower() == '10d6' and pf.read().strip().lower() == '10d6':
+                        wired_path = p
+                        break
             except Exception:
                 pass
+
+    if wired_path:
+        if cached_headset and cached_headset.get("battery") is not None:
+            cached_headset["connected"] = True
+            cached_headset["charging"] = True
+            cached_headset["state"] = "Charging (Wired)"
+            return cached_headset
+        return {
+            "name": "MCHOSE V9 Turbo",
+            "connected": True,
+            "battery": None,
+            "charging": True,
+            "state": "Charging (Plug 2.4G dongle for %)",
+            "node": wired_path
+        }
 
     # 3. Check ALSA sound cards (PipeWire / ALSA)
     for card in sorted(glob.glob('/sys/class/sound/card*')):
@@ -171,6 +212,9 @@ def find_v9_headset(v9_hidraw_nodes):
                 with open(id_file) as f:
                     c_id = f.read().strip().upper()
                     if 'MCHOSE' in c_id or 'V9' in c_id or 'TURBO' in c_id:
+                        if cached_headset and cached_headset.get("battery") is not None:
+                            cached_headset["connected"] = True
+                            return cached_headset
                         return {
                             "name": "MCHOSE V9 Turbo",
                             "connected": True,
@@ -181,6 +225,13 @@ def find_v9_headset(v9_hidraw_nodes):
                         }
             except Exception:
                 pass
+
+    # 4. If we have recent cached battery and 2.4G dongle is plugged but headset is asleep
+    if v9_hidraw_nodes:
+        if cached_headset and cached_headset.get("battery") is not None:
+            cached_headset["connected"] = True
+            cached_headset["sleeping"] = True
+            return cached_headset
 
     return None
 
@@ -211,7 +262,12 @@ def read_all_peripherals():
         else:
             result["mouse"] = {"name": "VXE Dragonfly R1+", "connected": False, "node": vxe_nodes[0]}
 
-    result["headset"] = find_v9_headset(v9_nodes)
+    cached_headset = cache.get("headset")
+    headset_res = find_v9_headset(v9_nodes, cached_headset)
+    if headset_res and headset_res.get("connected") and headset_res.get("battery") is not None:
+        cache["headset"] = headset_res
+        save_cache(cache)
+    result["headset"] = headset_res
 
     return result
 

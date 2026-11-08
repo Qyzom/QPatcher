@@ -300,8 +300,9 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             // 2. Headset update
             if (headset && headset.connected) {
                 if (headset.battery !== null) {
-                    this._headsetBadge.text = `${headset.battery}%`;
-                    this._headsetSub.text = headset.state || 'Connected';
+                    const chg = headset.charging ? ' ⚡' : '';
+                    this._headsetBadge.text = `${headset.battery}%${chg}`;
+                    this._headsetSub.text = headset.state || (headset.charging ? 'Charging' : 'Connected');
                 } else {
                     this._headsetBadge.text = 'Active';
                     this._headsetSub.text = headset.state || 'USB Audio Device';
