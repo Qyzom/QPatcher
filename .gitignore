@@ -9,3 +9,4 @@ dock/schemas/gschemas.compiled
 *.swp
 *.bak
 .cache/
+__pycache__/
