@@ -68,12 +68,12 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             // Load initial state instantly from cache file if available
             const cached = this._readCachedData();
             if (cached) {
-                this._applyData(cached);
+                this._applyData(cached, false);
             }
 
             this.menu.connect('open-state-changed', (_menu, isOpen) => {
                 if (isOpen) {
-                    this.refresh();
+                    this.refresh(false);
                 }
             });
 
@@ -87,7 +87,7 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             if (this._extension?._interfaceSettings) {
                 this._accentSig = this._extension._interfaceSettings.connect('changed::accent-color', () => {
                     if (this._latestData) {
-                        this._applyData(this._latestData);
+                        this._applyData(this._latestData, false);
                     }
                 });
             }
@@ -130,10 +130,40 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             return `battery-level-${rounded}${chgStr}-symbolic`;
         }
 
+        _animateRefresh() {
+            if (!this._refreshIcon) return;
+            try {
+                this._refreshIcon.set_pivot_point(0.5, 0.5);
+                this._refreshIcon.rotation_angle_z = 0;
+                this._refreshIcon.ease({
+                    rotation_angle_z: 360,
+                    duration: 550,
+                    mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+                    onComplete: () => {
+                        try {
+                            this._refreshIcon.rotation_angle_z = 0;
+                        } catch (_) {}
+                    },
+                });
+            } catch (_) {}
+        }
+
+        _flashBadge(actor) {
+            if (!actor) return;
+            try {
+                actor.opacity = 100;
+                actor.ease({
+                    opacity: 255,
+                    duration: 300,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                });
+            } catch (_) {}
+        }
+
         _buildMenu() {
             this.menu.removeAll();
 
-            // Header: clean title without extra buttons
+            // Header: title with animated interactive refresh button
             const headerItem = new PopupMenu.PopupBaseMenuItem({
                 reactive: false,
                 can_focus: false,
@@ -149,6 +179,24 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
                 y_align: Clutter.ActorAlign.CENTER,
             });
             headerBox.add_child(titleLabel);
+
+            this._refreshIcon = new St.Icon({
+                icon_name: 'view-refresh-symbolic',
+                icon_size: 14,
+            });
+            this._refreshIcon.set_pivot_point(0.5, 0.5);
+
+            this._refreshBtn = new St.Button({
+                style_class: 'button',
+                can_focus: true,
+                child: this._refreshIcon,
+                style: 'padding: 4px 7px; border-radius: 6px;',
+            });
+            this._refreshBtn.connect('clicked', () => {
+                this.refresh(true);
+            });
+            headerBox.add_child(this._refreshBtn);
+
             headerItem.add_child(headerBox);
             this.menu.addMenuItem(headerItem);
 
@@ -236,14 +284,14 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
         }
 
         startPolling() {
-            this.refresh();
+            this.refresh(false);
             const intervalSec = Math.max(10, this._settings?.get_int('battery-poll-interval') || 30);
             if (this._pollTimeoutId) {
                 GLib.Source.remove(this._pollTimeoutId);
                 this._pollTimeoutId = null;
             }
             this._pollTimeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_LOW, intervalSec, () => {
-                this.refresh();
+                this.refresh(false);
                 return GLib.SOURCE_CONTINUE;
             });
         }
@@ -255,16 +303,31 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             }
         }
 
-        async refresh() {
+        async refresh(interactive = false) {
             if (this._isQuerying) return;
             this._isQuerying = true;
+
+            if (interactive) {
+                this._animateRefresh();
+            }
+
+            if (this._refreshBtn) {
+                this._refreshBtn.reactive = false;
+                try {
+                    this._refreshBtn.ease({
+                        opacity: 130,
+                        duration: 150,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+                } catch (_) {}
+            }
 
             try {
                 const scriptPath = `${this._extension.path}/battery_reader.py`;
                 const { stdout, stderr } = await execSubprocess(['python3', scriptPath]);
                 if (stdout) {
                     const data = JSON.parse(stdout.trim());
-                    this._applyData(data);
+                    this._applyData(data, interactive);
                 } else if (stderr) {
                     console.error('[QPatcher] Battery reader stderr:', stderr);
                 }
@@ -272,10 +335,20 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
                 console.error('[QPatcher] Battery refresh error:', e);
             } finally {
                 this._isQuerying = false;
+                if (this._refreshBtn) {
+                    this._refreshBtn.reactive = true;
+                    try {
+                        this._refreshBtn.ease({
+                            opacity: 255,
+                            duration: 200,
+                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                        });
+                    } catch (_) {}
+                }
             }
         }
 
-        _applyData(data) {
+        _applyData(data, interactive = false) {
             this._latestData = data;
             const mouse = data?.mouse;
             const headset = data?.headset;
@@ -307,6 +380,11 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             } else {
                 this._headsetBadge.text = 'Offline';
                 this._headsetBadge.style = offlineStyle;
+            }
+
+            if (interactive) {
+                this._flashBadge(this._mouseBadge);
+                this._flashBadge(this._headsetBadge);
             }
 
             // 3. Top bar icon and label
