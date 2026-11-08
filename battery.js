@@ -7,6 +7,28 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
+function execSubprocess(argv) {
+    return new Promise((resolve, reject) => {
+        try {
+            const proc = new Gio.Subprocess({
+                argv: argv,
+                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
+            });
+            proc.init(null);
+            proc.communicate_utf8_async(null, null, (p, res) => {
+                try {
+                    const [, stdout, stderr] = p.communicate_utf8_finish(res);
+                    resolve({ stdout, stderr });
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
 export const QPatcherBatteryIndicator = GObject.registerClass(
     class QPatcherBatteryIndicator extends PanelMenu.Button {
         constructor(extension, settings) {
@@ -254,19 +276,15 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
 
             try {
                 const scriptPath = `${this._extension.path}/battery_reader.py`;
-                const proc = new Gio.Subprocess({
-                    argv: ['python3', scriptPath],
-                    flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
-                });
-                proc.init(null);
-
-                const [stdoutBytes] = await proc.communicate_utf8_async(null, null);
-                if (stdoutBytes) {
-                    const data = JSON.parse(stdoutBytes.trim());
+                const { stdout, stderr } = await execSubprocess(['python3', scriptPath]);
+                if (stdout) {
+                    const data = JSON.parse(stdout.trim());
                     this._applyData(data);
+                } else if (stderr) {
+                    console.error('[QPatcher] Battery reader stderr:', stderr);
                 }
             } catch (e) {
-                // Ignore or log error
+                console.error('[QPatcher] Battery refresh error:', e);
             } finally {
                 this._isQuerying = false;
             }

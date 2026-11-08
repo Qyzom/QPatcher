@@ -2,8 +2,8 @@
 # Grants non-root access to supported gaming mice and headsets for real-time battery monitoring.
 
 # VXE Dragonfly R1 / R1+ / Pro / SE (CompX 1K/4K/8K Wireless Dongles)
-KERNEL=="hidraw*", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="1085", MODE="0666", TAG+="uaccess"
-KERNEL=="hidraw*", ATTRS{idVendor}=="3554", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="1085", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", MODE="0666", TAG+="uaccess"
 
 # MCHOSE V9 Turbo Wireless Gaming Headset (C-Media Electronics)
-KERNEL=="hidraw*", ATTRS{idVendor}=="3837", ATTRS{idProduct}=="600d", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3837", ATTRS{idProduct}=="600d", MODE="0666", TAG+="uaccess"
