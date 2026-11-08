@@ -221,22 +221,6 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
 
             this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-            // Footer link: Open ATK Web Driver
-            const webHubItem = new PopupMenu.PopupMenuItem('Configure Mouse (ATK Web Hub)');
-            webHubItem.insert_child_at_index(new St.Icon({
-                icon_name: 'web-browser-symbolic',
-                icon_size: 14,
-                style: 'margin-right: 8px;',
-            }), 0);
-            webHubItem.connect('activate', () => {
-                try {
-                    Gio.AppInfo.launch_default_for_uri('https://hub.atk.pro', null);
-                } catch (e) {
-                    console.error('[QPatcher] Failed to launch ATK Web Hub:', e);
-                }
-            });
-            this.menu.addMenuItem(webHubItem);
-
             // Footer link: QPatcher Preferences
             const prefsItem = new PopupMenu.PopupMenuItem('QPatcher Settings');
             prefsItem.insert_child_at_index(new St.Icon({
@@ -302,17 +286,15 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
                 const voltStr = mouse.voltage ? ` • ${(mouse.voltage / 1000).toFixed(2)} V` : '';
                 const stateStr = mouse.charging ? 'Charging' : 'Discharging';
                 this._mouseSub.text = `${stateStr}${voltStr}`;
-                this._mouseBadge.style = mouse.battery <= 20
-                    ? 'font-weight: bold; padding: 2px 8px; border-radius: 6px; background: rgba(220,53,69,0.3); color: #ff6b6b;'
-                    : 'font-weight: bold; padding: 2px 8px; border-radius: 6px; background: rgba(40,167,69,0.25); color: #51cf66;';
+                this._mouseBadge.style = 'font-weight: 600; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08);';
             } else if (mouse && mouse.error && mouse.error.includes('Permission denied')) {
                 this._mouseSub.text = 'Need udev rule (Permission Denied)';
                 this._mouseBadge.text = 'Locked';
-                this._mouseBadge.style = 'font-weight: bold; padding: 2px 8px; border-radius: 6px; background: rgba(255,193,7,0.2); color: #ffd43b;';
+                this._mouseBadge.style = 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); opacity: 0.6;';
             } else {
                 this._mouseSub.text = 'Not detected / Sleeping';
                 this._mouseBadge.text = 'Offline';
-                this._mouseBadge.style = 'font-weight: bold; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08); opacity: 0.6;';
+                this._mouseBadge.style = 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); opacity: 0.5;';
             }
 
             // 2. Headset update
@@ -324,11 +306,11 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
                     this._headsetBadge.text = 'Active';
                     this._headsetSub.text = headset.state || 'USB Audio Device';
                 }
-                this._headsetBadge.style = 'font-weight: bold; padding: 2px 8px; border-radius: 6px; background: rgba(40,167,69,0.25); color: #51cf66;';
+                this._headsetBadge.style = 'font-weight: 600; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08);';
             } else {
                 this._headsetSub.text = 'Disconnected';
                 this._headsetBadge.text = 'Offline';
-                this._headsetBadge.style = 'font-weight: bold; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08); opacity: 0.6;';
+                this._headsetBadge.style = 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); opacity: 0.5;';
             }
 
             // 3. Top bar icon and label

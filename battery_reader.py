@@ -120,16 +120,68 @@ def query_vxe_mouse(node, cached_data=None):
 
     return None
 
-def query_v9_headset(node):
-    if os.path.exists(node):
-        return {
-            "name": "MCHOSE V9 Turbo",
-            "connected": True,
-            "battery": None,
-            "charging": False,
-            "state": "Active (USB Audio)",
-            "node": node
-        }
+def find_v9_headset(v9_hidraw_nodes):
+    # 1. Check if connected via 2.4G hidraw
+    for node in v9_hidraw_nodes:
+        if os.path.exists(node):
+            return {
+                "name": "MCHOSE V9 Turbo",
+                "connected": True,
+                "battery": None,
+                "charging": False,
+                "state": "Connected (2.4G)",
+                "node": node
+            }
+
+    # 2. Check USB devices in sysfs (handles wired USB-C mode 10d6:10d6 or 3837:600d)
+    for p in sorted(glob.glob('/sys/bus/usb/devices/*')):
+        v_file = os.path.join(p, 'idVendor')
+        p_file = os.path.join(p, 'idProduct')
+        if os.path.exists(v_file) and os.path.exists(p_file):
+            try:
+                with open(v_file) as vf, open(p_file) as pf:
+                    vid = vf.read().strip().lower()
+                    pid = pf.read().strip().lower()
+                    if vid == '10d6' and pid == '10d6':
+                        return {
+                            "name": "MCHOSE V9 Turbo",
+                            "connected": True,
+                            "battery": None,
+                            "charging": True,
+                            "state": "Wired / Charging",
+                            "node": p
+                        }
+                    elif vid == '3837' and pid == '600d':
+                        return {
+                            "name": "MCHOSE V9 Turbo",
+                            "connected": True,
+                            "battery": None,
+                            "charging": False,
+                            "state": "Connected (2.4G)",
+                            "node": p
+                        }
+            except Exception:
+                pass
+
+    # 3. Check ALSA sound cards (PipeWire / ALSA)
+    for card in sorted(glob.glob('/sys/class/sound/card*')):
+        id_file = os.path.join(card, 'id')
+        if os.path.exists(id_file):
+            try:
+                with open(id_file) as f:
+                    c_id = f.read().strip().upper()
+                    if 'MCHOSE' in c_id or 'V9' in c_id or 'TURBO' in c_id:
+                        return {
+                            "name": "MCHOSE V9 Turbo",
+                            "connected": True,
+                            "battery": None,
+                            "charging": False,
+                            "state": "Audio Active",
+                            "node": card
+                        }
+            except Exception:
+                pass
+
     return None
 
 def read_all_peripherals():
@@ -159,11 +211,7 @@ def read_all_peripherals():
         else:
             result["mouse"] = {"name": "VXE Dragonfly R1+", "connected": False, "node": vxe_nodes[0]}
 
-    for node in v9_nodes:
-        res = query_v9_headset(node)
-        if res:
-            result["headset"] = res
-            break
+    result["headset"] = find_v9_headset(v9_nodes)
 
     return result
 
