@@ -39,8 +39,9 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             this._pollTimeoutId = null;
             this._isQuerying = false;
             this._latestData = null;
+            this._accentSig = null;
 
-            // Panel Actor: Container with Icon and optional Percentage Label
+            // Panel Actor: Icon and optional Percentage Label
             this._box = new St.BoxLayout({
                 style_class: 'panel-status-indicators-box',
                 y_align: Clutter.ActorAlign.CENTER,
@@ -64,6 +65,12 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
 
             this._buildMenu();
 
+            // Load initial state instantly from cache file if available
+            const cached = this._readCachedData();
+            if (cached) {
+                this._applyData(cached);
+            }
+
             this.menu.connect('open-state-changed', (_menu, isOpen) => {
                 if (isOpen) {
                     this.refresh();
@@ -77,7 +84,30 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
                 });
             }
 
+            if (this._extension?._interfaceSettings) {
+                this._accentSig = this._extension._interfaceSettings.connect('changed::accent-color', () => {
+                    if (this._latestData) {
+                        this._applyData(this._latestData);
+                    }
+                });
+            }
+
             this.startPolling();
+        }
+
+        _getAccentColor() {
+            return this._extension?._getAccentHex?.() || '#5e6f82';
+        }
+
+        _readCachedData() {
+            try {
+                const [ok, contents] = GLib.file_get_contents('/tmp/qpatcher_peripheral_battery.json');
+                if (ok) {
+                    const str = new TextDecoder().decode(contents);
+                    return JSON.parse(str);
+                }
+            } catch (e) {}
+            return null;
         }
 
         _updatePanelLabelVisibility() {
@@ -103,7 +133,7 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
         _buildMenu() {
             this.menu.removeAll();
 
-            // Header section
+            // Header: clean title without extra buttons
             const headerItem = new PopupMenu.PopupBaseMenuItem({
                 reactive: false,
                 can_focus: false,
@@ -119,28 +149,17 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
                 y_align: Clutter.ActorAlign.CENTER,
             });
             headerBox.add_child(titleLabel);
-
-            const refreshBtn = new St.Button({
-                style_class: 'button',
-                can_focus: true,
-                child: new St.Icon({
-                    icon_name: 'view-refresh-symbolic',
-                    icon_size: 14,
-                }),
-            });
-            refreshBtn.connect('clicked', () => this.refresh());
-            headerBox.add_child(refreshBtn);
             headerItem.add_child(headerBox);
             this.menu.addMenuItem(headerItem);
 
             this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-            // 1. Mouse item (VXE Dragonfly R1+)
+            // 1. Mouse item (VXE Dragonfly R1+) - Single clean row
             this._mouseItem = new PopupMenu.PopupBaseMenuItem({ reactive: true });
             this._mouseBox = new St.BoxLayout({
                 x_expand: true,
                 y_align: Clutter.ActorAlign.CENTER,
-                style: 'spacing: 10px;',
+                style: 'spacing: 12px;',
             });
 
             this._mouseIcon = new St.Icon({
@@ -150,26 +169,17 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             });
             this._mouseBox.add_child(this._mouseIcon);
 
-            const mouseTextCol = new St.BoxLayout({
-                orientation: Clutter.Orientation.VERTICAL,
+            this._mouseTitle = new St.Label({
+                text: 'VXE Dragonfly R1+',
+                style: 'font-weight: 500; font-size: 13px;',
                 x_expand: true,
                 y_align: Clutter.ActorAlign.CENTER,
             });
-            this._mouseTitle = new St.Label({
-                text: 'VXE Dragonfly R1+',
-                style: 'font-weight: 600;',
-            });
-            this._mouseSub = new St.Label({
-                text: 'Scanning...',
-                style: 'font-size: 11px; opacity: 0.7;',
-            });
-            mouseTextCol.add_child(this._mouseTitle);
-            mouseTextCol.add_child(this._mouseSub);
-            this._mouseBox.add_child(mouseTextCol);
+            this._mouseBox.add_child(this._mouseTitle);
 
             this._mouseBadge = new St.Label({
                 text: '--',
-                style: 'font-weight: bold; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08);',
+                style: 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background-color: rgba(255,255,255,0.08); color: rgba(255,255,255,0.45);',
                 y_align: Clutter.ActorAlign.CENTER,
             });
             this._mouseBox.add_child(this._mouseBadge);
@@ -177,12 +187,12 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             this._mouseItem.add_child(this._mouseBox);
             this.menu.addMenuItem(this._mouseItem);
 
-            // 2. Headset item (MCHOSE V9 Turbo)
+            // 2. Headset item (MCHOSE V9 Turbo) - Single clean row
             this._headsetItem = new PopupMenu.PopupBaseMenuItem({ reactive: true });
             this._headsetBox = new St.BoxLayout({
                 x_expand: true,
                 y_align: Clutter.ActorAlign.CENTER,
-                style: 'spacing: 10px;',
+                style: 'spacing: 12px;',
             });
 
             this._headsetIcon = new St.Icon({
@@ -192,26 +202,17 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             });
             this._headsetBox.add_child(this._headsetIcon);
 
-            const headsetTextCol = new St.BoxLayout({
-                orientation: Clutter.Orientation.VERTICAL,
+            this._headsetTitle = new St.Label({
+                text: 'MCHOSE V9 Turbo',
+                style: 'font-weight: 500; font-size: 13px;',
                 x_expand: true,
                 y_align: Clutter.ActorAlign.CENTER,
             });
-            this._headsetTitle = new St.Label({
-                text: 'MCHOSE V9 Turbo',
-                style: 'font-weight: 600;',
-            });
-            this._headsetSub = new St.Label({
-                text: 'Scanning...',
-                style: 'font-size: 11px; opacity: 0.7;',
-            });
-            headsetTextCol.add_child(this._headsetTitle);
-            headsetTextCol.add_child(this._headsetSub);
-            this._headsetBox.add_child(headsetTextCol);
+            this._headsetBox.add_child(this._headsetTitle);
 
             this._headsetBadge = new St.Label({
-                text: 'Active',
-                style: 'font-weight: bold; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08);',
+                text: '--',
+                style: 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background-color: rgba(255,255,255,0.08); color: rgba(255,255,255,0.45);',
                 y_align: Clutter.ActorAlign.CENTER,
             });
             this._headsetBox.add_child(this._headsetBadge);
@@ -278,23 +279,19 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             this._latestData = data;
             const mouse = data?.mouse;
             const headset = data?.headset;
+            const accent = this._getAccentColor();
+
+            const activeStyle = `font-weight: 600; padding: 2px 8px; border-radius: 6px; background-color: ${accent}; color: #ffffff;`;
+            const offlineStyle = 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background-color: rgba(255,255,255,0.08); color: rgba(255,255,255,0.45);';
 
             // 1. Mouse update
             if (mouse && mouse.connected && mouse.battery !== null) {
                 const chg = mouse.charging ? ' ⚡' : '';
                 this._mouseBadge.text = `${mouse.battery}%${chg}`;
-                const voltStr = mouse.voltage ? ` • ${(mouse.voltage / 1000).toFixed(2)} V` : '';
-                const stateStr = mouse.charging ? 'Charging' : 'Discharging';
-                this._mouseSub.text = `${stateStr}${voltStr}`;
-                this._mouseBadge.style = 'font-weight: 600; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08);';
-            } else if (mouse && mouse.error && mouse.error.includes('Permission denied')) {
-                this._mouseSub.text = 'Need udev rule (Permission Denied)';
-                this._mouseBadge.text = 'Locked';
-                this._mouseBadge.style = 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); opacity: 0.6;';
+                this._mouseBadge.style = activeStyle;
             } else {
-                this._mouseSub.text = 'Not detected / Sleeping';
                 this._mouseBadge.text = 'Offline';
-                this._mouseBadge.style = 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); opacity: 0.5;';
+                this._mouseBadge.style = offlineStyle;
             }
 
             // 2. Headset update
@@ -302,22 +299,23 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
                 if (headset.battery !== null) {
                     const chg = headset.charging ? ' ⚡' : '';
                     this._headsetBadge.text = `${headset.battery}%${chg}`;
-                    this._headsetSub.text = headset.state || (headset.charging ? 'Charging' : 'Connected');
+                    this._headsetBadge.style = activeStyle;
                 } else {
-                    this._headsetBadge.text = 'Active';
-                    this._headsetSub.text = headset.state || 'USB Audio Device';
+                    this._headsetBadge.text = headset.charging ? 'Charging' : 'Active';
+                    this._headsetBadge.style = activeStyle;
                 }
-                this._headsetBadge.style = 'font-weight: 600; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08);';
             } else {
-                this._headsetSub.text = 'Disconnected';
                 this._headsetBadge.text = 'Offline';
-                this._headsetBadge.style = 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); opacity: 0.5;';
+                this._headsetBadge.style = offlineStyle;
             }
 
             // 3. Top bar icon and label
             if (mouse && mouse.connected && mouse.battery !== null) {
                 this._icon.icon_name = this._getBatteryIconName(mouse.battery, mouse.charging);
                 this._label.text = `${mouse.battery}%`;
+            } else if (headset && headset.connected && headset.battery !== null) {
+                this._icon.icon_name = this._getBatteryIconName(headset.battery, headset.charging);
+                this._label.text = `${headset.battery}%`;
             } else if (headset && headset.connected) {
                 this._icon.icon_name = 'battery-level-100-symbolic';
                 this._label.text = 'Audio';
@@ -334,6 +332,10 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             if (this._settingsSig && this._settings) {
                 this._settings.disconnect(this._settingsSig);
                 this._settingsSig = null;
+            }
+            if (this._accentSig && this._extension?._interfaceSettings) {
+                this._extension._interfaceSettings.disconnect(this._accentSig);
+                this._accentSig = null;
             }
             super.destroy();
         }
