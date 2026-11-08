@@ -9,11 +9,14 @@ Supports:
 import glob
 import json
 import os
+import select
 import sys
+import time
 
 VXE_REPORT_ID = 0x08
 VXE_CMD_BATTERY = 0x04
 VXE_CMD_LEN = 16
+CACHE_FILE = "/tmp/qpatcher_peripheral_battery.json"
 
 def calc_vxe_checksum(buf):
     s = VXE_REPORT_ID + sum(buf[:VXE_CMD_LEN - 1])
@@ -25,11 +28,27 @@ def build_vxe_battery_request():
     payload[VXE_CMD_LEN - 1] = calc_vxe_checksum(payload)
     return bytes([VXE_REPORT_ID]) + bytes(payload)
 
+def load_cache():
+    try:
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE, "r") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_cache(cache):
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump(cache, f)
+    except Exception:
+        pass
+
 def find_hidraw_devices():
     vxe_nodes = []
     v9_nodes = []
 
-    for p in glob.glob("/sys/class/hidraw/hidraw*"):
+    for p in sorted(glob.glob("/sys/class/hidraw/hidraw*")):
         dev_dir = os.path.realpath(os.path.join(p, "device"))
         uevent_file = os.path.join(dev_dir, "uevent")
         if not os.path.exists(uevent_file):
@@ -42,7 +61,7 @@ def find_hidraw_devices():
 
         dev_node = f"/dev/{os.path.basename(p)}"
         if "373B:00001085" in content or "373B:1085" in content or "3554:" in content:
-            # Prefer vendor config interface (1.1)
+            # Prefer interface 1.1 (the mouse control interface)
             if ":1.1" in dev_dir or "1.1" in dev_dir:
                 vxe_nodes.insert(0, dev_node)
             else:
@@ -52,12 +71,29 @@ def find_hidraw_devices():
 
     return vxe_nodes, v9_nodes
 
-def query_vxe_mouse(node):
+def query_vxe_mouse(node, cached_data=None):
     req = build_vxe_battery_request()
     try:
-        with open(node, "r+b", buffering=0) as f:
-            f.write(req)
-            resp = f.read(64)
+        fd = os.open(node, os.O_RDWR | os.O_NONBLOCK)
+    except Exception as e:
+        return {
+            "name": "VXE Dragonfly R1+",
+            "connected": False,
+            "error": str(e),
+            "node": node
+        }
+
+    try:
+        # Send battery query packet (17 bytes)
+        os.write(fd, req)
+
+        # Wait up to 1.2s for response
+        start_time = time.time()
+        while time.time() - start_time < 1.2:
+            r, _, _ = select.select([fd], [], [], 0.08)
+            if not r:
+                continue
+            resp = os.read(fd, 64)
             if len(resp) >= 8 and resp[0] == VXE_REPORT_ID and resp[1] == VXE_CMD_BATTERY:
                 capacity = int(resp[6])
                 is_charging = bool(resp[7])
@@ -68,58 +104,60 @@ def query_vxe_mouse(node):
                     "battery": capacity,
                     "charging": is_charging,
                     "voltage": voltage_mv,
-                    "node": node
+                    "node": node,
+                    "updated_at": time.time()
                 }
     except Exception as e:
-        return {
-            "name": "VXE Dragonfly R1+",
-            "connected": False,
-            "error": str(e),
-            "node": node
-        }
+        pass
+    finally:
+        os.close(fd)
+
+    # If mouse was idle/sleeping but we have recent cached battery data (within 24h)
+    if cached_data and cached_data.get("battery") is not None:
+        cached_data["connected"] = True
+        cached_data["sleeping"] = True
+        return cached_data
+
     return None
 
 def query_v9_headset(node):
-    # Probe MCHOSE V9 Turbo C-Media USB Audio interface
-    try:
-        # Check if node is accessible
-        with open(node, "r+b", buffering=0) as f:
-            # Query vendor report 0x55 or 0x41 if supported
-            return {
-                "name": "MCHOSE V9 Turbo",
-                "connected": True,
-                "battery": None,
-                "charging": False,
-                "state": "Active (USB Audio)",
-                "node": node
-            }
-    except Exception as e:
+    if os.path.exists(node):
         return {
             "name": "MCHOSE V9 Turbo",
             "connected": True,
             "battery": None,
-            "state": "Connected",
-            "error": str(e),
+            "charging": False,
+            "state": "Active (USB Audio)",
             "node": node
         }
+    return None
 
 def read_all_peripherals():
+    cache = load_cache()
     vxe_nodes, v9_nodes = find_hidraw_devices()
     result = {
         "mouse": None,
         "headset": None
     }
 
+    cached_mouse = cache.get("mouse")
     for node in vxe_nodes:
-        res = query_vxe_mouse(node)
+        res = query_vxe_mouse(node, cached_mouse)
         if res and res.get("connected"):
             result["mouse"] = res
+            cache["mouse"] = res
+            save_cache(cache)
             break
         elif res and not result["mouse"]:
             result["mouse"] = res
 
     if not result["mouse"] and vxe_nodes:
-        result["mouse"] = {"name": "VXE Dragonfly R1+", "connected": False, "node": vxe_nodes[0]}
+        if cached_mouse and cached_mouse.get("battery") is not None:
+            cached_mouse["connected"] = True
+            cached_mouse["sleeping"] = True
+            result["mouse"] = cached_mouse
+        else:
+            result["mouse"] = {"name": "VXE Dragonfly R1+", "connected": False, "node": vxe_nodes[0]}
 
     for node in v9_nodes:
         res = query_v9_headset(node)
@@ -135,9 +173,11 @@ def main():
         m = data.get("mouse")
         if m and m.get("battery") is not None:
             chg = " ⚡" if m.get("charging") else ""
-            print(f"🖱️ {m.get('name')}: {m.get('battery')}%{chg}")
-        elif m:
-            print(f"🖱️ {m.get('name')}: Disconnected / Permission Denied")
+            sleep = " (Idle)" if m.get("sleeping") else ""
+            volt = f" • {m.get('voltage')} mV" if m.get('voltage') else ""
+            print(f"🖱️ {m.get('name')}: {m.get('battery')}%{chg}{sleep}{volt}")
+        elif m and m.get("error"):
+            print(f"🖱️ {m.get('name')}: Error: {m.get('error')}")
         else:
             print("🖱️ Mouse: Not Detected")
 
