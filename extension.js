@@ -3171,7 +3171,6 @@ export default class QPatcherExtension extends Extension {
         }
 
         Main.screenshotUI._saveScreenshot = async function() {
-            self._playScreenshotSound();
             let file = null;
 
             if (this._selectionButton.checked || this._screenButton.checked) {
@@ -3180,7 +3179,7 @@ export default class QPatcherExtension extends Extension {
                     return;
 
                 const texture = content.get_texture();
-                const geometry = this._getSelectedGeometry(true);
+                const geometry = this._getSelectedGeometry(false);
 
                 let cursorTexture = this._cursor.content?.get_texture();
                 if (!this._cursor.visible)
@@ -3234,6 +3233,7 @@ export default class QPatcherExtension extends Extension {
             }
 
             if (file) {
+                self._playScreenshotSound();
                 this.emit('screenshot-taken', file);
             }
         };
@@ -3287,12 +3287,26 @@ export default class QPatcherExtension extends Extension {
             this._dragEndedSignalId = areaSelector.connect('drag-ended', () => {
                 if (!this._getSettingBool('screenshot-quick-capture')) return;
                 if (!Main.screenshotUI?.visible || !Main.screenshotUI?._selectionButton?.checked) return;
+                if (this._quickCaptureBusy) return;
 
                 const [x, y, w, h] = areaSelector.getGeometry();
                 if (w > 20 && h > 20) {
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        if (Main.screenshotUI?.visible && Main.screenshotUI?._selectionButton?.checked) {
-                            Main.screenshotUI._onCaptureButtonClicked().catch(err => console.error(err));
+                    this._quickCaptureBusy = true;
+                    areaSelector.reactive = false;
+
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, async () => {
+                        try {
+                            if (Main.screenshotUI?.visible && Main.screenshotUI?._selectionButton?.checked) {
+                                await Main.screenshotUI._onCaptureButtonClicked();
+                            }
+                        } catch (err) {
+                            console.error('[QPatcher] Quick capture error:', err);
+                        } finally {
+                            if (Main.screenshotUI?.visible) {
+                                Main.screenshotUI.close(true);
+                            }
+                            areaSelector.reactive = true;
+                            this._quickCaptureBusy = false;
                         }
                         return GLib.SOURCE_REMOVE;
                     });
@@ -3338,6 +3352,17 @@ export default class QPatcherExtension extends Extension {
                         if (areaSelector._bottomLeftHandle) areaSelector._bottomLeftHandle.visible = false;
                         if (areaSelector._bottomRightHandle) areaSelector._bottomRightHandle.visible = false;
                     }
+                }
+            } else {
+                this._quickCaptureBusy = false;
+                const areaSelector = Main.screenshotUI._areaSelector;
+                if (areaSelector) {
+                    areaSelector.reactive = true;
+                    areaSelector._startX = 0;
+                    areaSelector._startY = 0;
+                    areaSelector._lastX = 0;
+                    areaSelector._lastY = 0;
+                    areaSelector._areaIndicator?.setSelectionRect(0, 0, 0, 0);
                 }
             }
         });
@@ -3409,42 +3434,14 @@ export default class QPatcherExtension extends Extension {
 
     async _captureScreenshotCustom(texture, geometry, scale, cursor) {
         const stream = Gio.MemoryOutputStream.new_resizable();
-        const texWidth = texture.get_width();
-        const texHeight = texture.get_height();
+        let [x, y, w, h] = (geometry && Array.isArray(geometry)) ? geometry : [0, 0, -1, -1];
 
-        let x = 0;
-        let y = 0;
-        let w = texWidth;
-        let h = texHeight;
-
-        if (geometry && Array.isArray(geometry)) {
-            let [gx, gy, gw, gh] = geometry;
-
-            // If area was not explicitly selected (0x0 or 1x1 on reset) or invalid
-            if ((gw <= 2 && gh <= 2) || gw <= 0 || gh <= 0) {
-                // Fullscreen capture of all monitors (exact texture size, not -1, -1)
-                x = 0;
-                y = 0;
-                w = texWidth;
-                h = texHeight;
-            } else {
-                gx = Math.round(gx);
-                gy = Math.round(gy);
-                gw = Math.round(gw);
-                gh = Math.round(gh);
-
-                // Clamp origin coordinates within texture bounds
-                x = Math.max(0, Math.min(gx, texWidth - 1));
-                y = Math.max(0, Math.min(gy, texHeight - 1));
-
-                // If origin was outside left/top boundary, compensate width/height
-                if (gx < 0) gw += gx;
-                if (gy < 0) gh += gy;
-
-                // Strictly clamp width and height so x + w <= texWidth and y + h <= texHeight
-                w = Math.max(1, Math.min(gw, texWidth - x));
-                h = Math.max(1, Math.min(gh, texHeight - y));
-            }
+        // If area was not explicitly selected (e.g. 0x0 or <= 2px) or invalid, capture full texture
+        if (w <= 2 || h <= 2) {
+            x = 0;
+            y = 0;
+            w = -1;
+            h = -1;
         }
 
         if (cursor === null) {
