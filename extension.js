@@ -3171,6 +3171,7 @@ export default class QPatcherExtension extends Extension {
         }
 
         Main.screenshotUI._saveScreenshot = async function() {
+            self._playScreenshotSound();
             let file = null;
 
             if (this._selectionButton.checked || this._screenButton.checked) {
@@ -3233,7 +3234,6 @@ export default class QPatcherExtension extends Extension {
             }
 
             if (file) {
-                self._playScreenshotSound();
                 this.emit('screenshot-taken', file);
             }
         };
@@ -3250,13 +3250,10 @@ export default class QPatcherExtension extends Extension {
                         const filePath = file?.get_path ? file.get_path() : '';
                         if (filePath && (
                             filePath.endsWith('screen-capture.oga') ||
-                            filePath.endsWith('camera-shutter.oga') ||
-                            filePath.endsWith('audio-volume-change.oga') ||
-                            filePath.endsWith('click.ogg') ||
-                            filePath.endsWith('complete.oga')
+                            filePath.endsWith('camera-shutter.oga')
                         )) {
                             const now = GLib.get_monotonic_time();
-                            if (self._lastScreenshotSoundTime && (now - self._lastScreenshotSoundTime) < 300000) {
+                            if (self._lastScreenshotSoundTime && (now - self._lastScreenshotSoundTime) < 150000) {
                                 return;
                             }
                             const soundMode = self._getSettingString('screenshot-sound', 'default');
@@ -3371,7 +3368,7 @@ export default class QPatcherExtension extends Extension {
     _playScreenshotSound() {
         try {
             const now = GLib.get_monotonic_time();
-            if (this._lastScreenshotSoundTime && (now - this._lastScreenshotSoundTime) < 300000) {
+            if (this._lastScreenshotSoundTime && (now - this._lastScreenshotSoundTime) < 150000) {
                 return;
             }
             this._lastScreenshotSoundTime = now;
@@ -3401,17 +3398,17 @@ export default class QPatcherExtension extends Extension {
             }
 
             if (soundFile && GLib.file_test(soundFile, GLib.FileTest.EXISTS)) {
-                const pwPlay = GLib.find_program_in_path('pw-play');
                 const canberraPlay = GLib.find_program_in_path('canberra-gtk-play');
+                const pwPlay = GLib.find_program_in_path('pw-play');
                 const paPlay = GLib.find_program_in_path('paplay');
 
                 let playerCmd = null;
-                if (pwPlay) {
-                    playerCmd = [pwPlay, '--volume', '0.25', soundFile];
-                } else if (canberraPlay) {
-                    playerCmd = [canberraPlay, '-f', soundFile, '-V', '-12.0'];
+                if (canberraPlay) {
+                    playerCmd = [canberraPlay, '-f', soundFile, '-V', '-12.0', '-c', 'permanent', '--property=media.role=event'];
+                } else if (pwPlay) {
+                    playerCmd = [pwPlay, '--volume', '0.25', '--media-role=Notification', '--media-category=Feedback', '--latency=10ms', soundFile];
                 } else if (paPlay) {
-                    playerCmd = [paPlay, '--volume', '16384', soundFile];
+                    playerCmd = [paPlay, '--volume', '16384', '--property=media.role=event', soundFile];
                 }
 
                 if (playerCmd) {
