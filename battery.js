@@ -86,6 +86,7 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
 
             if (this._extension?._interfaceSettings) {
                 this._accentSig = this._extension._interfaceSettings.connect('changed::accent-color', () => {
+                    this._updateRefreshBtnStyle();
                     if (this._latestData) {
                         this._applyData(this._latestData, false);
                     }
@@ -97,6 +98,12 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
 
         _getAccentColor() {
             return this._extension?._getAccentHex?.() || '#5e6f82';
+        }
+
+        _updateRefreshBtnStyle() {
+            if (!this._refreshBtn) return;
+            const accent = this._getAccentColor();
+            this._refreshBtn.style = `padding: 4px 16px; border-radius: 8px; background-color: ${accent}; color: #ffffff;`;
         }
 
         _readCachedData() {
@@ -163,7 +170,7 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
         _buildMenu() {
             this.menu.removeAll();
 
-            // Header: title with animated interactive refresh button
+            // Header: title with wide accent-colored interactive refresh button
             const headerItem = new PopupMenu.PopupBaseMenuItem({
                 reactive: false,
                 can_focus: false,
@@ -183,6 +190,7 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             this._refreshIcon = new St.Icon({
                 icon_name: 'view-refresh-symbolic',
                 icon_size: 14,
+                style: 'color: #ffffff;',
             });
             this._refreshIcon.set_pivot_point(0.5, 0.5);
 
@@ -190,8 +198,9 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
                 style_class: 'button',
                 can_focus: true,
                 child: this._refreshIcon,
-                style: 'padding: 4px 7px; border-radius: 6px;',
             });
+            this._updateRefreshBtnStyle();
+
             this._refreshBtn.connect('clicked', () => {
                 this.refresh(true);
             });
@@ -226,7 +235,7 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             this._mouseBox.add_child(this._mouseTitle);
 
             this._mouseBadge = new St.Label({
-                text: '--',
+                text: '? %',
                 style: 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background-color: rgba(255,255,255,0.08); color: rgba(255,255,255,0.45);',
                 y_align: Clutter.ActorAlign.CENTER,
             });
@@ -259,7 +268,7 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             this._headsetBox.add_child(this._headsetTitle);
 
             this._headsetBadge = new St.Label({
-                text: '--',
+                text: '? %',
                 style: 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background-color: rgba(255,255,255,0.08); color: rgba(255,255,255,0.45);',
                 y_align: Clutter.ActorAlign.CENTER,
             });
@@ -357,28 +366,23 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             const activeStyle = `font-weight: 600; padding: 2px 8px; border-radius: 6px; background-color: ${accent}; color: #ffffff;`;
             const offlineStyle = 'font-weight: 500; padding: 2px 8px; border-radius: 6px; background-color: rgba(255,255,255,0.08); color: rgba(255,255,255,0.45);';
 
-            // 1. Mouse update
+            // 1. Mouse update: show % if known, else '? %'
             if (mouse && mouse.connected && mouse.battery !== null) {
                 const chg = mouse.charging ? ' ⚡' : '';
                 this._mouseBadge.text = `${mouse.battery}%${chg}`;
                 this._mouseBadge.style = activeStyle;
             } else {
-                this._mouseBadge.text = 'Offline';
+                this._mouseBadge.text = '? %';
                 this._mouseBadge.style = offlineStyle;
             }
 
-            // 2. Headset update
-            if (headset && headset.connected) {
-                if (headset.battery !== null) {
-                    const chg = headset.charging ? ' ⚡' : '';
-                    this._headsetBadge.text = `${headset.battery}%${chg}`;
-                    this._headsetBadge.style = activeStyle;
-                } else {
-                    this._headsetBadge.text = headset.charging ? 'Charging' : 'Active';
-                    this._headsetBadge.style = activeStyle;
-                }
+            // 2. Headset update: show % if known, else '? %' (no 'Active' or 'Offline')
+            if (headset && headset.connected && headset.battery !== null) {
+                const chg = headset.charging ? ' ⚡' : '';
+                this._headsetBadge.text = `${headset.battery}%${chg}`;
+                this._headsetBadge.style = activeStyle;
             } else {
-                this._headsetBadge.text = 'Offline';
+                this._headsetBadge.text = '? %';
                 this._headsetBadge.style = offlineStyle;
             }
 
@@ -394,9 +398,6 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
             } else if (headset && headset.connected && headset.battery !== null) {
                 this._icon.icon_name = this._getBatteryIconName(headset.battery, headset.charging);
                 this._label.text = `${headset.battery}%`;
-            } else if (headset && headset.connected) {
-                this._icon.icon_name = 'battery-level-100-symbolic';
-                this._label.text = 'Audio';
             } else {
                 this._icon.icon_name = 'battery-missing-symbolic';
                 this._label.text = '';
