@@ -368,8 +368,7 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
 
             // 1. Mouse update: show % if known, else '? %'
             if (mouse && mouse.connected && mouse.battery !== null) {
-                const chg = mouse.charging ? ' ⚡' : '';
-                this._mouseBadge.text = `${mouse.battery}%${chg}`;
+                this._mouseBadge.text = `${mouse.battery}%`;
                 this._mouseBadge.style = activeStyle;
             } else {
                 this._mouseBadge.text = '? %';
@@ -378,8 +377,7 @@ export const QPatcherBatteryIndicator = GObject.registerClass(
 
             // 2. Headset update: show % if known, else '? %' (no 'Active' or 'Offline')
             if (headset && headset.connected && headset.battery !== null) {
-                const chg = headset.charging ? ' ⚡' : '';
-                this._headsetBadge.text = `${headset.battery}%${chg}`;
+                this._headsetBadge.text = `${headset.battery}%`;
                 this._headsetBadge.style = activeStyle;
             } else {
                 this._headsetBadge.text = '? %';

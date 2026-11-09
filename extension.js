@@ -3256,7 +3256,7 @@ export default class QPatcherExtension extends Extension {
                             filePath.endsWith('complete.oga')
                         )) {
                             const now = GLib.get_monotonic_time();
-                            if (self._lastScreenshotSoundTime && (now - self._lastScreenshotSoundTime) < 3500000) {
+                            if (self._lastScreenshotSoundTime && (now - self._lastScreenshotSoundTime) < 300000) {
                                 return;
                             }
                             const soundMode = self._getSettingString('screenshot-sound', 'default');
@@ -3346,7 +3346,7 @@ export default class QPatcherExtension extends Extension {
     _playScreenshotSound() {
         try {
             const now = GLib.get_monotonic_time();
-            if (this._lastScreenshotSoundTime && (now - this._lastScreenshotSoundTime) < 3500000) {
+            if (this._lastScreenshotSoundTime && (now - this._lastScreenshotSoundTime) < 300000) {
                 return;
             }
             this._lastScreenshotSoundTime = now;
@@ -3376,12 +3376,22 @@ export default class QPatcherExtension extends Extension {
             }
 
             if (soundFile && GLib.file_test(soundFile, GLib.FileTest.EXISTS)) {
-                const player = GLib.find_program_in_path('pw-play') ||
-                               GLib.find_program_in_path('canberra-gtk-play') ||
-                               GLib.find_program_in_path('paplay');
-                if (player) {
+                const pwPlay = GLib.find_program_in_path('pw-play');
+                const canberraPlay = GLib.find_program_in_path('canberra-gtk-play');
+                const paPlay = GLib.find_program_in_path('paplay');
+
+                let playerCmd = null;
+                if (pwPlay) {
+                    playerCmd = [pwPlay, '--volume', '0.25', soundFile];
+                } else if (canberraPlay) {
+                    playerCmd = [canberraPlay, '-f', soundFile, '-V', '-12.0'];
+                } else if (paPlay) {
+                    playerCmd = [paPlay, '--volume', '16384', soundFile];
+                }
+
+                if (playerCmd) {
                     try {
-                        Gio.Subprocess.new([player, soundFile], Gio.SubprocessFlags.NONE);
+                        Gio.Subprocess.new(playerCmd, Gio.SubprocessFlags.NONE);
                         return;
                     } catch (e) {}
                 }
