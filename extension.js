@@ -3284,6 +3284,19 @@ export default class QPatcherExtension extends Extension {
             this._dragStartPos = null;
             this._isCapturing = false;
 
+            if (!this._fullDimOverlay) {
+                this._fullDimOverlay = new St.Widget({
+                    style_class: 'screenshot-ui-area-indicator-shade',
+                    reactive: false,
+                    visible: false,
+                });
+                this._fullDimOverlay.add_constraint(new Clutter.BindConstraint({
+                    source: global.stage,
+                    coordinate: Clutter.BindCoordinate.ALL,
+                }));
+                areaSelector.insert_child_at_index(this._fullDimOverlay, 0);
+            }
+
             if (!this._origComputeCursorType) {
                 this._origComputeCursorType = areaSelector._computeCursorType;
                 const self = this;
@@ -3301,6 +3314,7 @@ export default class QPatcherExtension extends Extension {
                 const [sx, sy] = global.get_pointer();
                 this._dragStartPos = { x: sx, y: sy };
 
+                if (this._fullDimOverlay) this._fullDimOverlay.visible = false;
                 areaSelector._hasUserSelection = true;
                 if (areaSelector._areaIndicator) areaSelector._areaIndicator.visible = true;
                 if (areaSelector._topLeftHandle) areaSelector._topLeftHandle.visible = true;
@@ -3330,6 +3344,9 @@ export default class QPatcherExtension extends Extension {
                     this._isCapturing = true;
                     areaSelector.reactive = false;
 
+                    // Instantly hide the screenshot UI so screen returns to normal with 0ms delay!
+                    Main.screenshotUI.opacity = 0;
+
                     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 20, () => {
                         try {
                             if (Main.screenshotUI?.visible && Main.screenshotUI?._selectionButton?.checked) {
@@ -3337,15 +3354,18 @@ export default class QPatcherExtension extends Extension {
                                     console.error('[QPatcher] Quick capture error:', err);
                                     this._isCapturing = false;
                                     areaSelector.reactive = true;
+                                    Main.screenshotUI.opacity = 255;
                                 });
                             } else {
                                 this._isCapturing = false;
                                 areaSelector.reactive = true;
+                                Main.screenshotUI.opacity = 255;
                             }
                         } catch (e) {
                             console.error('[QPatcher] Quick capture dispatch error:', e);
                             this._isCapturing = false;
                             areaSelector.reactive = true;
+                            Main.screenshotUI.opacity = 255;
                         }
                         return GLib.SOURCE_REMOVE;
                     });
@@ -3379,6 +3399,7 @@ export default class QPatcherExtension extends Extension {
                 this._isCapturing = false;
                 this._isUserDragging = false;
                 this._dragStartPos = null;
+                Main.screenshotUI.opacity = 255;
                 if (areaSelector) {
                     areaSelector.reactive = true;
                     areaSelector._hasUserSelection = false;
@@ -3386,8 +3407,9 @@ export default class QPatcherExtension extends Extension {
 
                 updatePanelVisibility();
 
-                // Reset default selection area (start with clean screen)
+                // Reset default selection area (start with clean screen & uniform dimming)
                 if (this._getSettingBool('screenshot-clear-selection', true)) {
+                    if (this._fullDimOverlay) this._fullDimOverlay.visible = true;
                     if (areaSelector) {
                         if (areaSelector._areaIndicator) areaSelector._areaIndicator.visible = false;
                         if (areaSelector._topLeftHandle) areaSelector._topLeftHandle.visible = false;
@@ -3395,11 +3417,15 @@ export default class QPatcherExtension extends Extension {
                         if (areaSelector._bottomLeftHandle) areaSelector._bottomLeftHandle.visible = false;
                         if (areaSelector._bottomRightHandle) areaSelector._bottomRightHandle.visible = false;
                     }
+                } else {
+                    if (this._fullDimOverlay) this._fullDimOverlay.visible = false;
                 }
             } else {
                 this._isCapturing = false;
                 this._isUserDragging = false;
                 this._dragStartPos = null;
+                Main.screenshotUI.opacity = 255;
+                if (this._fullDimOverlay) this._fullDimOverlay.visible = false;
                 if (areaSelector) {
                     areaSelector._hasUserSelection = false;
                     areaSelector.reactive = true;
@@ -3661,7 +3687,12 @@ export default class QPatcherExtension extends Extension {
         this._dragStartPos = null;
         this._isCapturing = false;
         this._saveScreenshotBusy = false;
+        if (this._fullDimOverlay) {
+            this._fullDimOverlay.destroy();
+            this._fullDimOverlay = null;
+        }
         if (Main.screenshotUI) {
+            Main.screenshotUI.opacity = 255;
             if (Main.screenshotUI._areaSelector) {
                 Main.screenshotUI._areaSelector.reactive = true;
                 Main.screenshotUI._areaSelector._hasUserSelection = false;
