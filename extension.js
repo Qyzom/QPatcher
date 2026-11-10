@@ -3274,7 +3274,11 @@ export default class QPatcherExtension extends Extension {
         if (Main.screenshotUI._areaSelector) {
             const areaSelector = Main.screenshotUI._areaSelector;
 
+            this._isUserDragging = false;
+
             this._dragStartedSignalId = areaSelector.connect('drag-started', () => {
+                this._isUserDragging = true;
+                if (areaSelector._areaIndicator) areaSelector._areaIndicator.visible = true;
                 if (areaSelector._topLeftHandle) areaSelector._topLeftHandle.visible = true;
                 if (areaSelector._topRightHandle) areaSelector._topRightHandle.visible = true;
                 if (areaSelector._bottomLeftHandle) areaSelector._bottomLeftHandle.visible = true;
@@ -3282,14 +3286,16 @@ export default class QPatcherExtension extends Extension {
             });
 
             this._dragEndedSignalId = areaSelector.connect('drag-ended', () => {
+                if (!this._isUserDragging) return;
+                this._isUserDragging = false;
+
                 if (!this._getSettingBool('screenshot-quick-capture')) return;
                 if (!Main.screenshotUI?.visible || !Main.screenshotUI?._selectionButton?.checked) return;
                 if (this._quickCaptureBusy) return;
 
                 const [x, y, w, h] = areaSelector.getGeometry();
-                if (w > 20 && h > 20) {
+                if (w > 30 && h > 30) {
                     this._quickCaptureBusy = true;
-                    areaSelector.reactive = false;
 
                     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, async () => {
                         try {
@@ -3299,10 +3305,6 @@ export default class QPatcherExtension extends Extension {
                         } catch (err) {
                             console.error('[QPatcher] Quick capture error:', err);
                         } finally {
-                            if (Main.screenshotUI?.visible) {
-                                Main.screenshotUI.close(true);
-                            }
-                            areaSelector.reactive = true;
                             this._quickCaptureBusy = false;
                         }
                         return GLib.SOURCE_REMOVE;
@@ -3339,11 +3341,7 @@ export default class QPatcherExtension extends Extension {
                 if (this._getSettingBool('screenshot-clear-selection', true)) {
                     const areaSelector = Main.screenshotUI._areaSelector;
                     if (areaSelector) {
-                        areaSelector._startX = 0;
-                        areaSelector._startY = 0;
-                        areaSelector._lastX = 0;
-                        areaSelector._lastY = 0;
-                        areaSelector._areaIndicator?.setSelectionRect(0, 0, 0, 0);
+                        if (areaSelector._areaIndicator) areaSelector._areaIndicator.visible = false;
                         if (areaSelector._topLeftHandle) areaSelector._topLeftHandle.visible = false;
                         if (areaSelector._topRightHandle) areaSelector._topRightHandle.visible = false;
                         if (areaSelector._bottomLeftHandle) areaSelector._bottomLeftHandle.visible = false;
@@ -3351,15 +3349,11 @@ export default class QPatcherExtension extends Extension {
                     }
                 }
             } else {
+                this._isUserDragging = false;
                 this._quickCaptureBusy = false;
                 const areaSelector = Main.screenshotUI._areaSelector;
                 if (areaSelector) {
-                    areaSelector.reactive = true;
-                    areaSelector._startX = 0;
-                    areaSelector._startY = 0;
-                    areaSelector._lastX = 0;
-                    areaSelector._lastY = 0;
-                    areaSelector._areaIndicator?.setSelectionRect(0, 0, 0, 0);
+                    if (areaSelector._areaIndicator) areaSelector._areaIndicator.visible = true;
                 }
             }
         });
@@ -3613,7 +3607,12 @@ export default class QPatcherExtension extends Extension {
     }
 
     _cleanupScreenshotCustomizations() {
+        this._isUserDragging = false;
+        this._quickCaptureBusy = false;
         if (Main.screenshotUI) {
+            if (Main.screenshotUI._areaSelector?._areaIndicator) {
+                Main.screenshotUI._areaSelector._areaIndicator.visible = true;
+            }
             if (this._origScreenshotOpen) {
                 Main.screenshotUI.open = this._origScreenshotOpen;
                 this._origScreenshotOpen = null;
