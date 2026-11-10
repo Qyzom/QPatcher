@@ -3171,70 +3171,76 @@ export default class QPatcherExtension extends Extension {
         }
 
         Main.screenshotUI._saveScreenshot = async function() {
-            self._playScreenshotSound();
-            let file = null;
+            if (self._saveScreenshotBusy) return;
+            self._saveScreenshotBusy = true;
+            try {
+                self._playScreenshotSound();
+                let file = null;
 
-            if (this._selectionButton.checked || this._screenButton.checked) {
-                const content = this._stageScreenshot.get_content();
-                if (!content)
-                    return;
+                if (this._selectionButton.checked || this._screenButton.checked) {
+                    const content = this._stageScreenshot.get_content();
+                    if (!content)
+                        return;
 
-                const texture = content.get_texture();
-                const geometry = this._getSelectedGeometry(false);
+                    const texture = content.get_texture();
+                    const geometry = this._getSelectedGeometry(true);
 
-                let cursorTexture = this._cursor.content?.get_texture();
-                if (!this._cursor.visible)
-                    cursorTexture = null;
+                    let cursorTexture = this._cursor.content?.get_texture();
+                    if (!this._cursor.visible)
+                        cursorTexture = null;
 
-                try {
-                    file = await self._captureScreenshotCustom(
-                        texture, geometry, this._scale,
-                        {
-                            texture: cursorTexture ?? null,
-                            x: this._cursor.x * this._scale,
-                            y: this._cursor.y * this._scale,
-                            scale: this._cursorScale,
-                        }
-                    );
-                } catch (e) {
-                    console.error('[QPatcher] Error capturing area/screen screenshot:', e);
+                    try {
+                        file = await self._captureScreenshotCustom(
+                            texture, geometry, this._scale,
+                            {
+                                texture: cursorTexture ?? null,
+                                x: this._cursor.x * this._scale,
+                                y: this._cursor.y * this._scale,
+                                scale: this._cursorScale,
+                            }
+                        );
+                    } catch (e) {
+                        console.error('[QPatcher] Error capturing area/screen screenshot:', e);
+                    }
+                } else if (this._windowButton.checked) {
+                    const window =
+                        this._windowSelectors.flatMap(selector => selector.windows())
+                                             .find(win => win.checked);
+                    if (!window)
+                        return;
+
+                    const content = window.windowContent;
+                    if (!content)
+                        return;
+
+                    const texture = content.get_texture();
+
+                    let cursorTexture = window.getCursorTexture()?.get_texture();
+                    if (!this._cursor.visible)
+                        cursorTexture = null;
+
+                    try {
+                        file = await self._captureScreenshotCustom(
+                            texture,
+                            null,
+                            window.bufferScale,
+                            {
+                                texture: cursorTexture ?? null,
+                                x: window.cursorPoint.x * window.bufferScale,
+                                y: window.cursorPoint.y * window.bufferScale,
+                                scale: this._cursorScale,
+                            }
+                        );
+                    } catch (e) {
+                        console.error('[QPatcher] Error capturing window screenshot:', e);
+                    }
                 }
-            } else if (this._windowButton.checked) {
-                const window =
-                    this._windowSelectors.flatMap(selector => selector.windows())
-                                         .find(win => win.checked);
-                if (!window)
-                    return;
 
-                const content = window.windowContent;
-                if (!content)
-                    return;
-
-                const texture = content.get_texture();
-
-                let cursorTexture = window.getCursorTexture()?.get_texture();
-                if (!this._cursor.visible)
-                    cursorTexture = null;
-
-                try {
-                    file = await self._captureScreenshotCustom(
-                        texture,
-                        null,
-                        window.bufferScale,
-                        {
-                            texture: cursorTexture ?? null,
-                            x: window.cursorPoint.x * window.bufferScale,
-                            y: window.cursorPoint.y * window.bufferScale,
-                            scale: this._cursorScale,
-                        }
-                    );
-                } catch (e) {
-                    console.error('[QPatcher] Error capturing window screenshot:', e);
+                if (file) {
+                    this.emit('screenshot-taken', file);
                 }
-            }
-
-            if (file) {
-                this.emit('screenshot-taken', file);
+            } finally {
+                self._saveScreenshotBusy = false;
             }
         };
 
@@ -3275,9 +3281,15 @@ export default class QPatcherExtension extends Extension {
             const areaSelector = Main.screenshotUI._areaSelector;
 
             this._isUserDragging = false;
+            this._dragStartPos = null;
+            this._isCapturing = false;
 
             this._dragStartedSignalId = areaSelector.connect('drag-started', () => {
+                if (this._isCapturing) return;
                 this._isUserDragging = true;
+                const [sx, sy] = global.get_pointer();
+                this._dragStartPos = { x: sx, y: sy };
+
                 if (areaSelector._areaIndicator) areaSelector._areaIndicator.visible = true;
                 if (areaSelector._topLeftHandle) areaSelector._topLeftHandle.visible = true;
                 if (areaSelector._topRightHandle) areaSelector._topRightHandle.visible = true;
@@ -3289,13 +3301,22 @@ export default class QPatcherExtension extends Extension {
                 if (!this._isUserDragging) return;
                 this._isUserDragging = false;
 
+                const startPos = this._dragStartPos;
+                this._dragStartPos = null;
+
+                if (this._isCapturing) return;
                 if (!this._getSettingBool('screenshot-quick-capture')) return;
                 if (!Main.screenshotUI?.visible || !Main.screenshotUI?._selectionButton?.checked) return;
-                if (this._quickCaptureBusy) return;
+
+                // Check actual mouse drag distance (ignore single clicks / accidental wiggles)
+                const [endX, endY] = global.get_pointer();
+                const dragDist = startPos ? Math.hypot(endX - startPos.x, endY - startPos.y) : 0;
+                if (dragDist < 25) return;
 
                 const [x, y, w, h] = areaSelector.getGeometry();
                 if (w > 30 && h > 30) {
-                    this._quickCaptureBusy = true;
+                    this._isCapturing = true;
+                    areaSelector.reactive = false;
 
                     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, async () => {
                         try {
@@ -3304,8 +3325,8 @@ export default class QPatcherExtension extends Extension {
                             }
                         } catch (err) {
                             console.error('[QPatcher] Quick capture error:', err);
-                        } finally {
-                            this._quickCaptureBusy = false;
+                            this._isCapturing = false;
+                            areaSelector.reactive = true;
                         }
                         return GLib.SOURCE_REMOVE;
                     });
@@ -3334,25 +3355,36 @@ export default class QPatcherExtension extends Extension {
         updatePanelVisibility();
 
         this._screenshotUiOpenSignalId = Main.screenshotUI.connect('notify::visible', () => {
+            const areaSelector = Main.screenshotUI._areaSelector;
             if (Main.screenshotUI.visible) {
+                this._isCapturing = false;
+                this._isUserDragging = false;
+                this._dragStartPos = null;
+                if (areaSelector) areaSelector.reactive = true;
+
                 updatePanelVisibility();
 
                 // Reset default selection area (start with clean screen)
                 if (this._getSettingBool('screenshot-clear-selection', true)) {
-                    const areaSelector = Main.screenshotUI._areaSelector;
                     if (areaSelector) {
                         if (areaSelector._areaIndicator) areaSelector._areaIndicator.visible = false;
                         if (areaSelector._topLeftHandle) areaSelector._topLeftHandle.visible = false;
                         if (areaSelector._topRightHandle) areaSelector._topRightHandle.visible = false;
                         if (areaSelector._bottomLeftHandle) areaSelector._bottomLeftHandle.visible = false;
                         if (areaSelector._bottomRightHandle) areaSelector._bottomRightHandle.visible = false;
+                        // Move selection bounds off-screen so any click initiates a new selection
+                        areaSelector._startX = -1000;
+                        areaSelector._startY = -1000;
+                        areaSelector._lastX = -1000;
+                        areaSelector._lastY = -1000;
                     }
                 }
             } else {
+                this._isCapturing = false;
                 this._isUserDragging = false;
-                this._quickCaptureBusy = false;
-                const areaSelector = Main.screenshotUI._areaSelector;
+                this._dragStartPos = null;
                 if (areaSelector) {
+                    areaSelector.reactive = true;
                     if (areaSelector._areaIndicator) areaSelector._areaIndicator.visible = true;
                 }
             }
@@ -3608,10 +3640,15 @@ export default class QPatcherExtension extends Extension {
 
     _cleanupScreenshotCustomizations() {
         this._isUserDragging = false;
-        this._quickCaptureBusy = false;
+        this._dragStartPos = null;
+        this._isCapturing = false;
+        this._saveScreenshotBusy = false;
         if (Main.screenshotUI) {
-            if (Main.screenshotUI._areaSelector?._areaIndicator) {
-                Main.screenshotUI._areaSelector._areaIndicator.visible = true;
+            if (Main.screenshotUI._areaSelector) {
+                Main.screenshotUI._areaSelector.reactive = true;
+                if (Main.screenshotUI._areaSelector._areaIndicator) {
+                    Main.screenshotUI._areaSelector._areaIndicator.visible = true;
+                }
             }
             if (this._origScreenshotOpen) {
                 Main.screenshotUI.open = this._origScreenshotOpen;
