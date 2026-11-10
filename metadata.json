@@ -19,6 +19,6 @@
   "settings-schema": "org.gnome.shell.extensions.qpatcher",
   "gettext-domain": "qpatcher",
   "url": "https://github.com/Qyzom/QPatcher",
-  "version": 4,
-  "version-name": "1.0.3"
+  "version": 5,
+  "version-name": "1.0.4"
 }
